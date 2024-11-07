@@ -10,10 +10,10 @@ try {
 }
 
 # Define storage account and containers
-$storageAccountName = "localizationstorage3"
-$sourceContainerName = "resx-files"
-$destinationContainerName = "samples-workitems"
-$connectionString = "DefaultEndpointsProtocol=https;AccountName=localizationstorage3;AccountKey=EbIfFahjb83IyuNKSg1Nprwzc4ZfB2n0cTO8LYYjpqj9FhA7BtdJQl5jZBJXDxdqmasfl4Ts+hx6+AStpSbESw==;EndpointSuffix=core.windows.net"
+$storageAccountName = "cloudlocalizationstorage"
+$sourceContainerName = "resx-input-files"
+$destinationContainerName = "xliff-temp-files"
+$connectionString = "DefaultEndpointsProtocol=https;AccountName=cloudlocalizationstorage;AccountKey=5fSpWeghTLLgkIYx1D36b6i/8/6s40/7vE4rjglpTpHOze4NUu6ADJk6W70ca9xXagM7/ePI4Lqa+AStDYW5Ug==;EndpointSuffix=core.windows.net"
 
 try {
     # Retrieve static.resx file content
