@@ -4,17 +4,17 @@ param($Timer)
 Import-Module Az.Storage
 
 # Container names
-$inputContainerName = "samples-workitems"
-$outputContainerName = "xlfout"
+$inputContainerName = "xliff-temp-files"
+$outputContainerName = "resx-output-files"
 
 # Connection string for Azure Storage
-$connectionString = "DefaultEndpointsProtocol=https;AccountName=localizationstorage3;AccountKey=EbIfFahjb83IyuNKSg1Nprwzc4ZfB2n0cTO8LYYjpqj9FhA7BtdJQl5jZBJXDxdqmasfl4Ts+hx6+AStpSbESw==;EndpointSuffix=core.windows.net"
+$connectionString = "DefaultEndpointsProtocol=https;AccountName=cloudlocalizationstorage;AccountKey=5fSpWeghTLLgkIYx1D36b6i/8/6s40/7vE4rjglpTpHOze4NUu6ADJk6W70ca9xXagM7/ePI4Lqa+AStDYW5Ug==;EndpointSuffix=core.windows.net"
 
 # Create a storage context using the connection string
 $storageContext = New-AzStorageContext -ConnectionString $connectionString
 
 # Azure Cognitive Services API Key
-$azureCogSvcTranslateAPIKey = "419ec3899a22484fbe94bbcb1c2f4b96"
+$azureCogSvcTranslateAPIKey = "EEEMrX5mJ6DudbrLBwWUZYeEWmg5pZpIuSMS22pn0eNVz8KDmJvMJQQJ99AKACYeBjFXJ3w3AAAbACOGuJOj"
 
 # Resource region
 $azureRegion = "eastus"
