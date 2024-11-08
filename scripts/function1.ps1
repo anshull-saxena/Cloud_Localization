@@ -1,6 +1,8 @@
 # Input bindings are passed in via param block.
 param($Timer)
 
+$config = Get-Content -Path "config.json" | ConvertFrom-Json
+
 # Import the Azure Storage module
 try {
     Import-Module Az.Storage -ErrorAction Stop
@@ -9,19 +11,17 @@ try {
     exit
 }
 
-# Define storage account and containers
-$storageAccountName = "cloudlocalizationstorage"
-$sourceContainerName = "resx-input-files"
-$destinationContainerName = "xliff-temp-files"
-$connectionString = "DefaultEndpointsProtocol=https;AccountName=cloudlocalizationstorage;AccountKey=5fSpWeghTLLgkIYx1D36b6i/8/6s40/7vE4rjglpTpHOze4NUu6ADJk6W70ca9xXagM7/ePI4Lqa+AStDYW5Ug==;EndpointSuffix=core.windows.net"
+$storageAccountName = $config.StorageAccountName
+$sourceContainerName = $config.InputContainerName
+$destinationContainerName = $config.TempContainerName
+$connectionString = $config.ConnectionString
+$targetLanguages = $config.TargetLanguages
 
 try {
     # Retrieve static.resx file content
     $context = New-AzStorageContext -ConnectionString $connectionString -ErrorAction Stop
     $sourceBlob = Get-AzStorageBlob -Container $sourceContainerName -Context $context -Blob "static.resx" -ErrorAction Stop
 
-    # Loop through target languages and create xliff files
-    $targetLanguages = @("en-US", "fr-FR", "es-ES") # Add more languages as needed
     foreach ($language in $targetLanguages) {
         try {
             # Create a temporary file to store the blob content
