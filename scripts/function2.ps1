@@ -1,23 +1,18 @@
 param($Timer)
 
+$config = Get-Content -Path "config.json" | ConvertFrom-Json
+
 # Import required modules
 Import-Module Az.Storage
 
-# Container names
-$inputContainerName = "xliff-temp-files"
-$outputContainerName = "resx-output-files"
-
-# Connection string for Azure Storage
-$connectionString = "DefaultEndpointsProtocol=https;AccountName=cloudlocalizationstorage;AccountKey=5fSpWeghTLLgkIYx1D36b6i/8/6s40/7vE4rjglpTpHOze4NUu6ADJk6W70ca9xXagM7/ePI4Lqa+AStDYW5Ug==;EndpointSuffix=core.windows.net"
+$inputContainerName = $config.TempContainerName
+$outputContainerName = $config.OutputContainerName
+$connectionString = $config.ConnectionString
+$azureCogSvcTranslateAPIKey = $config.AzureCognitiveServiceAPIKey
+$azureRegion = $config.AzureRegion
 
 # Create a storage context using the connection string
 $storageContext = New-AzStorageContext -ConnectionString $connectionString
-
-# Azure Cognitive Services API Key
-$azureCogSvcTranslateAPIKey = "EEEMrX5mJ6DudbrLBwWUZYeEWmg5pZpIuSMS22pn0eNVz8KDmJvMJQQJ99AKACYeBjFXJ3w3AAAbACOGuJOj"
-
-# Resource region
-$azureRegion = "eastus"
 
 # Function to translate content using Azure Translator Text API
 function GetTranslation {
