@@ -101,6 +101,14 @@ try {
         }
     }
     Write-Host "Translation and conversion process completed."
+
+    cd (Resolve-Path "$PSScriptRoot\..").Path
+
+    git add $config.TargetRepoPath
+    git commit -m "Add translated .resx files to target folder after successful pipeline execution"
+    git push origin main
+
+    Write-Host "Successfully pushed the target folder to Azure repo."
 }
 catch {
     Write-Host "Error occurred: $_"
