@@ -106,7 +106,7 @@ try {
 
     $gitCredential = @"
 url=https://dev.azure.com/SoftwareLocalization/_git/Localization
-username=Ayush Kalra
+username=ayushkalra09@gmail.com
 password=$env:AZURE_DEVOPS_PAT
 "@
 
