@@ -104,9 +104,14 @@ try {
 
     cd (Resolve-Path "$PSScriptRoot\..").Path
 
+    $branchName = git rev-parse --abbrev-ref HEAD
+    if ($branchName -eq "HEAD") {
+        $branchName = "main"
+    }
+
     git add $config.TargetRepoPath
     git commit -m "Add translated .resx files to target folder after successful pipeline execution"
-    git push origin main
+    git push origin $branchName
 
     Write-Host "Successfully pushed the target folder to Azure repo."
 }
