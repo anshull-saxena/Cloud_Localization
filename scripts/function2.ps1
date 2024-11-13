@@ -104,14 +104,19 @@ try {
 
     cd (Resolve-Path "$PSScriptRoot\..").Path
 
-    # Retrieve the default branch name
     $defaultBranch = git remote show origin | Select-String 'HEAD branch' | ForEach-Object { $_.ToString().Split(' ')[2] }
 
-    # If in detached HEAD state, use the default branch
     $branchName = git rev-parse --abbrev-ref HEAD
     if ($branchName -eq "HEAD") {
         $branchName = $defaultBranch
     }
+
+    $pat = $env:AZURE_DEVOPS_PAT
+
+    git config --global credential.helper store
+    git credential approve <<< "url=https://dev.azure.com/SoftwareLocalization/_git/Localization
+    username=SoftwareLocalization
+    password=$pat"
 
     # Git add, commit, and push
     git add $config.TargetRepoPath
