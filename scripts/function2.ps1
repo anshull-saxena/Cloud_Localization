@@ -102,16 +102,28 @@ try {
     }
     Write-Host "Translation and conversion process completed."
 
+    # Git setup and operations
+    $env:GIT_ASKPASS = "echo"
+    $env:GIT_USERNAME = "ayushkalra09@gmail.com"
+    $env:GIT_PASSWORD = $env:AZURE_DEVOPS_PAT
+
+    # Configure Git credentials
+    git config --global user.email "$env:GIT_USERNAME"
+    git config --global user.name "Ayush Kalra"
+    git config --global credential.helper cache
+
+    # Navigate to the main repository
     cd (Resolve-Path "$PSScriptRoot\..").Path
 
-    $gitCredential = @"
-url=https://dev.azure.com/SoftwareLocalization/_git/Localization
-username=ayushkalra09@gmail.com
-password=$env:AZURE_DEVOPS_PAT
-"@
+    # Ensure you're on the main branch
+    $branchExists = git branch --list main
+    if (-not $branchExists) {
+        git checkout -b main
+    } else {
+        git checkout main
+    }
 
-    $gitCredential | git credential approve
-
+    # Add, commit, and push changes
     git add $config.TargetRepoPath
     git commit -m "Add translated .resx files to target folder after successful pipeline execution"
     git push origin main
