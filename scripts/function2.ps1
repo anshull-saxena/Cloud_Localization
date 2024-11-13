@@ -104,11 +104,16 @@ try {
 
     cd (Resolve-Path "$PSScriptRoot\..").Path
 
+    # Retrieve the default branch name
+    $defaultBranch = git remote show origin | Select-String 'HEAD branch' | ForEach-Object { $_.ToString().Split(' ')[2] }
+
+    # If in detached HEAD state, use the default branch
     $branchName = git rev-parse --abbrev-ref HEAD
     if ($branchName -eq "HEAD") {
-        $branchName = "main"
+        $branchName = $defaultBranch
     }
 
+    # Git add, commit, and push
     git add $config.TargetRepoPath
     git commit -m "Add translated .resx files to target folder after successful pipeline execution"
     git push origin $branchName
