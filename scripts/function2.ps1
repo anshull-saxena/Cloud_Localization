@@ -115,6 +115,10 @@ try {
     # Navigate to the main repository
     cd (Resolve-Path "$PSScriptRoot\..").Path
 
+    # Check if the files are staged and commit them before checkout
+    git add $config.TargetRepoPath
+    git commit -m "Add translated .resx files to target folder after successful pipeline execution"
+
     # Ensure you're on the main branch
     $branchExists = git branch --list main
     if (-not $branchExists) {
@@ -123,9 +127,7 @@ try {
         git checkout main
     }
 
-    # Add, commit, and push changes
-    git add $config.TargetRepoPath
-    git commit -m "Add translated .resx files to target folder after successful pipeline execution"
+    # Push the changes
     git push origin main
 
     Write-Host "Successfully pushed the target folder to Azure repo."
