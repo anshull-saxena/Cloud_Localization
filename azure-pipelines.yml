@@ -26,3 +26,5 @@ jobs:
         inputs:
           filePath: 'scripts/function2.ps1'
           pwsh: false
+          env:
+            AZURE_DEVOPS_PAT: $(AZURE_DEVOPS_PAT)  # Set the PAT environment variable
