@@ -103,34 +103,38 @@ try {
     Write-Host "Translation and conversion process completed."
 
     # Git setup and operations
-    $env:GIT_ASKPASS = "echo"
-    $env:GIT_USERNAME = "ayushkalra09@gmail.com"
-    $env:GIT_PASSWORD = $env:AZURE_DEVOPS_PAT
+$env:GIT_ASKPASS = "echo"
+$env:GIT_USERNAME = "ayushkalra09@gmail.com"
+$env:GIT_PASSWORD = $env:AZURE_DEVOPS_PAT
 
-    # Configure Git to automatically use the PAT for authentication
-    git config --global user.email "$env:GIT_USERNAME"
-    git config --global user.name "Ayush"
-    git config --global credential.helper 'store'
+# Configure Git to automatically use the PAT for authentication
+git config --global user.email "$env:GIT_USERNAME"
+git config --global user.name "Ayush"
+git config --global credential.helper 'store'
 
-    # Navigate to the main repository
-    cd (Resolve-Path "$PSScriptRoot\..").Path
+# Navigate to the main repository
+cd (Resolve-Path "$PSScriptRoot\..").Path
 
-    # Check if the files are staged and commit them before checkout
-    git add $config.TargetRepoPath
-    git commit -m "Add translated .resx files to target folder after successful pipeline execution"
+# Set the correct remote URL for your Azure DevOps repository
+$remoteUrl = "https://dev.azure.com/SoftwareLocalization/_git/Localization"
+git remote set-url origin $remoteUrl
 
-    # Ensure you're on the main branch
-    $branchExists = git branch --list main
-    if (-not $branchExists) {
-        git checkout -b main
-    } else {
-        git checkout main
-    }
+# Check if the files are staged and commit them before checkout
+git add $config.TargetRepoPath
+git commit -m "Add translated .resx files to target folder after successful pipeline execution"
 
-    # Push the changes
-    git push origin main
+# Ensure you're on the main branch
+$branchExists = git branch --list main
+if (-not $branchExists) {
+    git checkout -b main
+} else {
+    git checkout main
+}
 
-    Write-Host "Successfully pushed the target folder to Azure repo."
+# Push the changes
+git push origin main
+
+Write-Host "Successfully pushed the target folder to Azure repo."
 }
 catch {
     Write-Host "Error occurred: $_"
