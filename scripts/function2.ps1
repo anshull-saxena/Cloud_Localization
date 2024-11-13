@@ -107,10 +107,10 @@ try {
     $env:GIT_USERNAME = "ayushkalra09@gmail.com"
     $env:GIT_PASSWORD = $env:AZURE_DEVOPS_PAT
 
-    # Configure Git credentials
+    # Configure Git to automatically use the PAT for authentication
     git config --global user.email "$env:GIT_USERNAME"
-    git config --global user.name "Ayush Kalra"
-    git config --global credential.helper cache
+    git config --global user.name "Ayush"
+    git config --global credential.helper 'store'
 
     # Navigate to the main repository
     cd (Resolve-Path "$PSScriptRoot\..").Path
