@@ -104,24 +104,17 @@ try {
 
     cd (Resolve-Path "$PSScriptRoot\..").Path
 
-    $defaultBranch = git remote show origin | Select-String 'HEAD branch' | ForEach-Object { $_.ToString().Split(' ')[2] }
+    $gitCredential = @"
+url=https://dev.azure.com/SoftwareLocalization/_git/Localization
+username=Ayush Kalra
+password=$env:AZURE_DEVOPS_PAT
+"@
 
-    $branchName = git rev-parse --abbrev-ref HEAD
-    if ($branchName -eq "HEAD") {
-        $branchName = $defaultBranch
-    }
+    $gitCredential | git credential approve
 
-    $pat = $env:AZURE_DEVOPS_PAT
-
-    git config --global credential.helper store
-    git credential approve <<< "url=https://dev.azure.com/SoftwareLocalization/_git/Localization
-    username=SoftwareLocalization
-    password=$pat"
-
-    # Git add, commit, and push
     git add $config.TargetRepoPath
     git commit -m "Add translated .resx files to target folder after successful pipeline execution"
-    git push origin $branchName
+    git push origin main
 
     Write-Host "Successfully pushed the target folder to Azure repo."
 }
