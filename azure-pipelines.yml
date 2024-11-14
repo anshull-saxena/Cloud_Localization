@@ -2,6 +2,8 @@ trigger:
   branches:
     include:
       - main
+    exclude:
+      -'target-folder/*'
 
 pool:
   name: 'Default'
@@ -29,5 +31,3 @@ jobs:
         inputs:
           filePath: 'scripts/function2.ps1'
           pwsh: false
-        env:
-          AZURE_DEVOPS_PAT: $(AZURE_DEVOPS_PAT)
