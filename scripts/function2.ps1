@@ -102,33 +102,16 @@ try {
     }
     Write-Host "Translation and conversion process completed."
 
-<<<<<<< HEAD
-    cd (Resolve-Path "$PSScriptRoot\..").Path
-
-    git add $config.TargetRepoPath
-    git commit -m "Add translated .resx files to target folder after successful pipeline execution"
-    git push origin main
-
-    Write-Host "Successfully pushed the target folder to Azure repo."
-=======
 # Navigate to the main repository
 cd (Resolve-Path "$PSScriptRoot\..").Path
 
-git init
-git remote add origin "https://dev.azure.com/SoftwareLocalization/_git/Localization"
+git pull origin main
 
-git add $config.TargetRepoPath
+git add .
 git commit -m "Add translated .resx files to target folder after successful pipeline execution"
-
-
-# Check if the files are staged and commit them before checkout
-git add $config.TargetRepoPath
-git commit -m "Add translated .resx files to target folder after successful pipeline execution"
-
-git push -u origin main
+git push origin main
 
 Write-Host "Successfully pushed the target folder to Azure repo."
->>>>>>> 1f40ed97814961d7a8c376827ebffb00801319a1
 }
 catch {
     Write-Host "Error occurred: $_"
