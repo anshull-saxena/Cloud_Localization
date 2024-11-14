@@ -107,10 +107,10 @@ try {
     git stash --include-untracked
 
     git checkout main
-    git pull origin main
+    git pull origin main --allow-unrelated-histories
     git stash pop
 
-    git add .
+    git add -f .
     git commit -m "Add translated .resx files to target folder after successful pipeline execution"
     git push origin main
 
