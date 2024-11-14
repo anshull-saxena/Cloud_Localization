@@ -9,6 +9,9 @@ pool:
 jobs:
   - job: Execute_Functions
     steps:
+      - checkout: self
+        persistCredentials: true
+        
       - task: PowerShell@2
         inputs:
           targetType: 'inline'
@@ -26,3 +29,5 @@ jobs:
         inputs:
           filePath: 'scripts/function2.ps1'
           pwsh: false
+        env:
+          AZURE_DEVOPS_PAT: $(AZURE_DEVOPS_PAT)
