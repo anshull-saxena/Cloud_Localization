@@ -103,6 +103,7 @@ try {
     Write-Host "Translation and conversion process completed."
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Navigate to the main repository
 cd (Resolve-Path "$PSScriptRoot\..").Path
 
@@ -114,6 +115,8 @@ git push origin main
 
 Write-Host "Successfully pushed the target folder to Azure repo."
 =======
+=======
+>>>>>>> 224db936367ebe3c5f76eac1b89b12aa92660022
     cd (Resolve-Path "$PSScriptRoot\..").Path
 
     git stash --include-untracked
@@ -127,7 +130,10 @@ Write-Host "Successfully pushed the target folder to Azure repo."
     git push origin main
 
     Write-Host "Successfully pushed the target folder to Azure repo."
+<<<<<<< HEAD
 >>>>>>> 3b48a7c3ec7a228c5facce15084c45e3c0bec7cd
+=======
+>>>>>>> 224db936367ebe3c5f76eac1b89b12aa92660022
 }
 catch {
     Write-Host "Error occurred: $_"
