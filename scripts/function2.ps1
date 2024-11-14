@@ -105,7 +105,7 @@ try {
 # Navigate to the main repository
 cd (Resolve-Path "$PSScriptRoot\..").Path
 
-git pull origin main
+git checkout main
 
 git add .
 git commit -m "Add translated .resx files to target folder after successful pipeline execution"
