@@ -102,6 +102,7 @@ try {
     }
     Write-Host "Translation and conversion process completed."
 
+<<<<<<< HEAD
 # Navigate to the main repository
 cd (Resolve-Path "$PSScriptRoot\..").Path
 
@@ -112,6 +113,21 @@ git commit -m "Add translated .resx files to target folder after successful pipe
 git push origin main
 
 Write-Host "Successfully pushed the target folder to Azure repo."
+=======
+    cd (Resolve-Path "$PSScriptRoot\..").Path
+
+    git stash --include-untracked
+
+    git checkout main
+    git pull origin main --allow-unrelated-histories
+    git stash pop
+
+    git add -f .
+    git commit -m "Add translated .resx files to target folder after successful pipeline execution"
+    git push origin main
+
+    Write-Host "Successfully pushed the target folder to Azure repo."
+>>>>>>> 3b48a7c3ec7a228c5facce15084c45e3c0bec7cd
 }
 catch {
     Write-Host "Error occurred: $_"
