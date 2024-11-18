@@ -21,6 +21,8 @@ jobs:
           script: |
             Install-PackageProvider -Name NuGet -Force -Confirm:$false -Scope CurrentUser
             Install-Module -Name Az.Storage -Force -Scope CurrentUser -AllowClobber -Confirm:$false
+            Install-Module -Name Az.Storage -Force -Scope CurrentUser -AllowClobber
+            Install-Module -Name SqlServer -Force -Scope CurrentUser -AllowClobber
           pwsh: false 
 
       - task: PowerShell@2
