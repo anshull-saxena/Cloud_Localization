@@ -104,14 +104,11 @@ try {
 
     cd (Resolve-Path "$PSScriptRoot\..").Path
 
-    git stash --include-untracked
-
     git checkout main
-    git pull origin main --allow-unrelated-histories
-    git stash pop
 
-    git add -f .
+    git add .
     git commit -m "Add translated .resx files to target folder after successful pipeline execution"
+    git pull origin main --rebase
     git push origin main
 
     Write-Host "Successfully pushed the target folder to Azure repo."
