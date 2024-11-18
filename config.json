@@ -5,7 +5,7 @@
     "TargetLanguages": ["ur-PK", "es-ES"],
     "AzureCognitiveServiceAPIKey": "EEEMrX5mJ6DudbrLBwWUZYeEWmg5pZpIuSMS22pn0eNVz8KDmJvMJQQJ99AKACYeBjFXJ3w3AAAbACOGuJOj",
     "AzureRegion": "eastus",
-    "OutputContainerName": "xlfout",
     "SourceRepoPath": "source-folder",
-    "TargetRepoPath": "target-folder"
+    "TargetRepoPath": "target-folder",
+    "SQLConnectionString": "Server=tcp:cloudlocalizationserver.database.windows.net,1433;Initial Catalog=cloudLocalisationDatabase;Persist Security Info=False;User ID=ayush;Password=Abcd@1234;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
 }
