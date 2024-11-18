@@ -4,11 +4,13 @@ $config = Get-Content -Path "config.json" | ConvertFrom-Json
 
 # Import required modules
 Import-Module Az.Storage
+Import-Module SqlServer
 
 $inputContainerName = $config.TempContainerName
 $connectionString = $config.ConnectionString
 $azureCogSvcTranslateAPIKey = $config.AzureCognitiveServiceAPIKey
 $azureRegion = $config.AzureRegion
+$sqlConnectionString = $config.SQLConnectionString
 
 # Set the relative path for the output folder in the main repository
 $outputFolderPath = Join-Path -Path (Resolve-Path "$PSScriptRoot\..").Path -ChildPath $config.TargetRepoPath
@@ -19,13 +21,96 @@ if (!(Test-Path -Path $outputFolderPath)) {
 # Create a storage context using the connection string
 $storageContext = New-AzStorageContext -ConnectionString $connectionString
 
+# Function to retrieve translation from the SQL Database
+function GetTranslationFromMemory {
+    param (
+        [string]$TextToTranslate,
+        [string]$TargetCultureID
+    )
+
+    $query = "SELECT tt.TranslatedText FROM SourceText st JOIN TargetText tt ON st.SourceID = tt.SourceID WHERE st.SourceText = @TextToTranslate AND st.TargetCultureID = @TargetCultureID"
+    
+    $params = @{
+        TextToTranslate = $TextToTranslate
+        TargetCultureID = $TargetCultureID
+    }
+
+    $connection = New-Object System.Data.SqlClient.SqlConnection
+    $connection.ConnectionString = $sqlConnectionString
+    $command = $connection.CreateCommand()
+    $command.CommandText = $query
+
+    # Add parameters to prevent SQL injection
+    foreach ($param in $params.Keys) {
+        $sqlParam = $command.Parameters.Add("@$param", [System.Data.SqlDbType]::NVarChar)
+        $sqlParam.Value = $params[$param]
+    }
+
+    $connection.Open()
+    $result = $command.ExecuteScalar()
+    $connection.Close()
+
+    #Write-Host $result
+
+    return $result
+}
+
+# Function to save new translation to the SQL Database
+function SaveTranslationToMemory {
+    param (
+        [string]$TextToTranslate,
+        [string]$TranslatedText,
+        [string]$TargetCultureID
+    )
+
+    $connection = New-Object System.Data.SqlClient.SqlConnection
+    $connection.ConnectionString = $sqlConnectionString
+    $connection.Open()
+
+    # Insert the source text if it does not exist
+    $checkSourceQuery = "SELECT SourceID FROM SourceText WHERE SourceText = @TextToTranslate AND TargetCultureID = @TargetCultureID"
+    $checkCommand = $connection.CreateCommand()
+    $checkCommand.CommandText = $checkSourceQuery
+    $checkCommand.Parameters.AddWithValue("@TextToTranslate", $TextToTranslate)
+    $checkCommand.Parameters.AddWithValue("@TargetCultureID", $TargetCultureID)
+
+    $sourceID = $checkCommand.ExecuteScalar()
+
+    if (-not $sourceID) {
+        $insertSourceQuery = "INSERT INTO SourceText (SourceText, TargetCultureID, CreatedAt) OUTPUT INSERTED.SourceID VALUES (@TextToTranslate, @TargetCultureID, GETDATE())"
+        $insertCommand = $connection.CreateCommand()
+        $insertCommand.CommandText = $insertSourceQuery
+        $insertCommand.Parameters.AddWithValue("@TextToTranslate", $TextToTranslate)
+        $insertCommand.Parameters.AddWithValue("@TargetCultureID", $TargetCultureID)
+
+        $sourceID = $insertCommand.ExecuteScalar()
+    }
+
+    # Insert the translated text
+    $insertTargetQuery = "INSERT INTO TargetText (SourceID, TranslatedText, UpdatedAt) VALUES (@SourceID, @TranslatedText, GETDATE())"
+    $targetCommand = $connection.CreateCommand()
+    $targetCommand.CommandText = $insertTargetQuery
+    $targetCommand.Parameters.AddWithValue("@SourceID", $sourceID)
+    $targetCommand.Parameters.AddWithValue("@TranslatedText", $TranslatedText)
+
+    $targetCommand.ExecuteNonQuery()
+    $connection.Close()
+}
+
 # Function to translate content using Azure Translator Text API
 function GetTranslation {
     param (
         [string]$TextToTranslate,
         [string]$SourceLanguage,
-        [string]$TargetLanguage
+        [string]$TargetLanguage,
+        [string]$TargetCultureID
     )
+
+    # Check translation memory first
+    $cachedTranslation = GetTranslationFromMemory -TextToTranslate $TextToTranslate -TargetCultureID $TargetCultureID
+    if ($cachedTranslation) {
+        return $cachedTranslation
+    }
 
     # Build the request URI
     $translationServiceURI = "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=$($SourceLanguage)&to=$($TargetLanguage)"
@@ -38,13 +123,19 @@ function GetTranslation {
     }
 
     # Prepare the body of the request
-    $TextToTranslate = @{'Text' = $TextToTranslate} | ConvertTo-Json
+    $TextBody = @{'Text' = $TextToTranslate} | ConvertTo-Json
 
     # Send text to Azure for translation
-    $RecoResponse = Invoke-RestMethod -Method POST -Uri $translationServiceURI -Headers $RecoRequestHeader -Body "[$TextToTranslate]"
+    $RecoResponse = Invoke-RestMethod -Method POST -Uri $translationServiceURI -Headers $RecoRequestHeader -Body "[$TextBody]"
 
-    # Return the translated text
-    return $RecoResponse.translations[0].text
+    # Get translated text
+    $translatedText = $RecoResponse.translations[0].text
+    #Write-Host $translatedText
+
+    # Save the new translation to the memory
+    SaveTranslationToMemory -TextToTranslate $TextToTranslate -TranslatedText $translatedText -TargetCultureID $TargetCultureID
+
+    return $translatedText
 }
 
 function Convert-XLIFFToResx {
@@ -61,10 +152,13 @@ function Convert-XLIFFToResx {
     foreach ($transUnitNode in $XLIFFContent.xliff.file.body.'trans-unit') {
         $id = $transUnitNode.id
         $sourceContent = $transUnitNode.source.InnerXml -replace '^\s*<\!\[CDATA\[', '' -replace '\]\]>\s*$'
+        #Write-Host $sourceContent
 
         # Translate the source content to the target language
-        $TargetLanguage = $TargetLanguage.Split('-')[0]
-        $translatedContent = GetTranslation -TextToTranslate $sourceContent -SourceLanguage "en" -TargetLanguage $TargetLanguage
+        $translatedContent = [string](GetTranslation -TextToTranslate $sourceContent -SourceLanguage "en" -TargetLanguage $TargetLanguage -TargetCultureID $TargetLanguage)
+        #$translatedContent = $translatedContent -replace "@TextToTranslate @TargetCultureID ", ""
+        $translatedContent = $translatedContent.Replace("@TextToTranslate @TargetCultureID @TextToTranslate @TargetCultureID @SourceID @TranslatedText 1 ", "")
+        #Write-Host $translatedContent
 
         # Add translated content to the .resx structure
         $resxContent += "<data name='$id' xml:lang='$TargetLanguage' xml:space='preserve'><value>$translatedContent</value></data>"
@@ -104,12 +198,11 @@ try {
 
     cd (Resolve-Path "$PSScriptRoot\..").Path
 
-    git checkout main
-
-    git add .
-    git commit -m "Add translated .resx files to target folder after successful pipeline execution"
-    git pull origin main --rebase
-    git push origin main
+    # git checkout main
+    # git add .
+    # git commit -m "Add translated .resx files to target folder after successful pipeline execution"
+    # git pull origin main --rebase
+    # git push origin main
 
     Write-Host "Successfully pushed the target folder to Azure repo."
 }
