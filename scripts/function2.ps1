@@ -171,6 +171,10 @@ function Convert-XLIFFToResx {
 }
 
 try {
+    cd (Resolve-Path "$PSScriptRoot\..").Path
+    git checkout main
+    git pull origin main --rebase
+
     $blobs = Get-AzStorageBlob -Container $inputContainerName -Context $storageContext
     foreach ($blob in $blobs) {
         if ($blob.Name -like "*.xliff") {
@@ -196,12 +200,8 @@ try {
     }
     Write-Host "Translation and conversion process completed."
 
-    cd (Resolve-Path "$PSScriptRoot\..").Path
-
-    git checkout main
     git add .
     git commit -m "Add translated .resx files to target folder after successful pipeline execution"
-    git pull origin main --rebase
     git push origin main
 
     Write-Host "Successfully pushed the target folder to Azure repo."
