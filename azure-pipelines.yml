@@ -4,7 +4,7 @@ trigger:
       - main
   paths:
     exclude:
-      - 'target-folder/*'
+      - target-folder/*
 
 pool:
   name: 'Default'
