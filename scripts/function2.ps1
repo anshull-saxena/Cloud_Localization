@@ -2,7 +2,6 @@ param($Timer)
 
 $config = Get-Content -Path "config.json" | ConvertFrom-Json
 
-# Import required modules
 Import-Module Az.Storage
 Import-Module SqlServer
 
@@ -12,16 +11,13 @@ $azureCogSvcTranslateAPIKey = $config.AzureCognitiveServiceAPIKey
 $azureRegion = $config.AzureRegion
 $sqlConnectionString = $config.SQLConnectionString
 
-# Set the relative path for the output folder in the main repository
 $outputFolderPath = Join-Path -Path (Resolve-Path "$PSScriptRoot\..").Path -ChildPath $config.TargetRepoPath
 if (!(Test-Path -Path $outputFolderPath)) {
     New-Item -ItemType Directory -Path $outputFolderPath | Out-Null
 }
 
-# Create a storage context using the connection string
 $storageContext = New-AzStorageContext -ConnectionString $connectionString
 
-# Function to retrieve translation from the SQL Database
 function GetTranslationFromMemory {
     param (
         [string]$TextToTranslate,
@@ -40,7 +36,6 @@ function GetTranslationFromMemory {
     $command = $connection.CreateCommand()
     $command.CommandText = $query
 
-    # Add parameters to prevent SQL injection
     foreach ($param in $params.Keys) {
         $sqlParam = $command.Parameters.Add("@$param", [System.Data.SqlDbType]::NVarChar)
         $sqlParam.Value = $params[$param]
@@ -50,12 +45,9 @@ function GetTranslationFromMemory {
     $result = $command.ExecuteScalar()
     $connection.Close()
 
-    #Write-Host $result
-
     return $result
 }
 
-# Function to save new translation to the SQL Database
 function SaveTranslationToMemory {
     param (
         [string]$TextToTranslate,
@@ -67,7 +59,6 @@ function SaveTranslationToMemory {
     $connection.ConnectionString = $sqlConnectionString
     $connection.Open()
 
-    # Insert the source text if it does not exist
     $checkSourceQuery = "SELECT SourceID FROM SourceText WHERE SourceText = @TextToTranslate AND TargetCultureID = @TargetCultureID"
     $checkCommand = $connection.CreateCommand()
     $checkCommand.CommandText = $checkSourceQuery
@@ -86,7 +77,6 @@ function SaveTranslationToMemory {
         $sourceID = $insertCommand.ExecuteScalar()
     }
 
-    # Insert the translated text
     $insertTargetQuery = "INSERT INTO TargetText (SourceID, TranslatedText, UpdatedAt) VALUES (@SourceID, @TranslatedText, GETDATE())"
     $targetCommand = $connection.CreateCommand()
     $targetCommand.CommandText = $insertTargetQuery
@@ -97,7 +87,6 @@ function SaveTranslationToMemory {
     $connection.Close()
 }
 
-# Function to translate content using Azure Translator Text API
 function GetTranslation {
     param (
         [string]$TextToTranslate,
@@ -106,33 +95,24 @@ function GetTranslation {
         [string]$TargetCultureID
     )
 
-    # Check translation memory first
     $cachedTranslation = GetTranslationFromMemory -TextToTranslate $TextToTranslate -TargetCultureID $TargetCultureID
     if ($cachedTranslation) {
         return $cachedTranslation
     }
 
-    # Build the request URI
     $translationServiceURI = "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=$($SourceLanguage)&to=$($TargetLanguage)"
 
-    # Request headers
     $RecoRequestHeader = @{
         'Ocp-Apim-Subscription-Key' = "$azureCogSvcTranslateAPIKey"
         'Ocp-Apim-Subscription-Region' = "$azureRegion"
         'Content-Type' = "application/json"
     }
 
-    # Prepare the body of the request
     $TextBody = @{'Text' = $TextToTranslate} | ConvertTo-Json
 
-    # Send text to Azure for translation
     $RecoResponse = Invoke-RestMethod -Method POST -Uri $translationServiceURI -Headers $RecoRequestHeader -Body "[$TextBody]"
 
-    # Get translated text
     $translatedText = $RecoResponse.translations[0].text
-    #Write-Host $translatedText
-
-    # Save the new translation to the memory
     SaveTranslationToMemory -TextToTranslate $TextToTranslate -TranslatedText $translatedText -TargetCultureID $TargetCultureID
 
     return $translatedText
@@ -144,27 +124,19 @@ function Convert-XLIFFToResx {
         [string]$TargetLanguage
     )
 
-    # Initialize .resx content
     $resxContent = '<?xml version="1.0" encoding="utf-8"?>
 <root>'
 
-    # Iterate over each <trans-unit> node in the XLIFF content
     foreach ($transUnitNode in $XLIFFContent.xliff.file.body.'trans-unit') {
         $id = $transUnitNode.id
         $sourceContent = $transUnitNode.source.InnerXml -replace '^\s*<\!\[CDATA\[', '' -replace '\]\]>\s*$'
-        #Write-Host $sourceContent
 
-        # Translate the source content to the target language
         $translatedContent = [string](GetTranslation -TextToTranslate $sourceContent -SourceLanguage "en" -TargetLanguage $TargetLanguage -TargetCultureID $TargetLanguage)
-        #$translatedContent = $translatedContent -replace "@TextToTranslate @TargetCultureID ", ""
         $translatedContent = $translatedContent.Replace("@TextToTranslate @TargetCultureID @TextToTranslate @TargetCultureID @SourceID @TranslatedText 1 ", "")
-        #Write-Host $translatedContent
 
-        # Add translated content to the .resx structure
         $resxContent += "<data name='$id' xml:lang='$TargetLanguage' xml:space='preserve'><value>$translatedContent</value></data>"
     }
 
-    # Close .resx file
     $resxContent += '</root>'
 
     return $resxContent
@@ -189,7 +161,6 @@ try {
             $resxContent = Convert-XLIFFToResx -XLIFFContent $xliffContent -TargetLanguage $targetLanguage
             $baseName = [System.IO.Path]::GetFileNameWithoutExtension($blob.Name)
 
-            # Save translated .resx file locally
             $outputFilePath = Join-Path -Path $outputFolderPath -ChildPath ("$baseName.resx")
             $resxContent | Out-File -FilePath $outputFilePath -Encoding UTF8
 
