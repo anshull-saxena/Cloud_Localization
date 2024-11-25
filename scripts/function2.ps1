@@ -171,6 +171,7 @@ try {
     }
     Write-Host "Translation and conversion process completed."
 
+    git checkout main
     git add .
     git commit -m "Add translated .resx files to target folder after successful pipeline execution"
     git push origin main
