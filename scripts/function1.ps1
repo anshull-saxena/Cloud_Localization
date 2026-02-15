@@ -134,18 +134,18 @@ try {
                     $languageCompletionMs = ($languageEndTime - $languageStartTime).TotalMilliseconds
                     
                     Add-LanguageMetric `
-                        -LanguageCode $language `($sourceFile.Name) for language ${language}: $_"
-            Write-Host "Error details: $($_.Exception.Message)"
-            if ($_.Exception.InnerException) {
-                Write-Host "Inner exception: $($_.Exception.InnerException.Message)"
-            }
+                        -LanguageCode $language `
                         -SentenceCount $sentences.Count `
                         -TotalTokens $(if ($batchMetrics) { $batchMetrics.TotalTokens } else { 0 }) `
                         -CompletionTimeMs $languageCompletionMs | Out-Null
                 }
             }
         } catch {
-            Write-Error "Failed to process file ${sourceFile.Name} for language ${language}: $_"
+            Write-Error "Failed to process file $($sourceFile.Name) for language ${language}: $_"
+            Write-Host "Error details: $($_.Exception.Message)"
+            if ($_.Exception.InnerException) {
+                Write-Host "Inner exception: $($_.Exception.InnerException.Message)"
+            }
         }
     }
     

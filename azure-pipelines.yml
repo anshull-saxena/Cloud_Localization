@@ -4,7 +4,7 @@ trigger:
       - main
 
 pool:
-  vmImage: 'windows-latest'
+  vmImage: 'ubuntu-latest'
 
 jobs:
   - job: Execute_Functions
@@ -27,18 +27,18 @@ jobs:
             Install-Module -Name SqlServer -Force -Scope CurrentUser -AllowClobber
             
             Write-Host "Modules installed successfully"
-          pwsh: false 
+          pwsh: true
 
       - task: PowerShell@2
         displayName: 'Run Function1 - Extract & Upload'
         inputs:
           filePath: 'scripts/function1.ps1'
-          pwsh: false
+          pwsh: true
         continueOnError: true
 
       - task: PowerShell@2
         displayName: 'Run Function2 - Translate'
         inputs:
           filePath: 'scripts/function2.ps1'
-          pwsh: false
+          pwsh: true
         continueOnError: true
