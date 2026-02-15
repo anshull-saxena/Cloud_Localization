@@ -72,7 +72,10 @@ function Start-LocalizationRun {
             TotalLanguages = 0
             TotalTokens = 0
             SLAViolation = $false
+            SLADeadlineSeconds = $null
             Throughput = 0
+            LatencyPercentiles = $null
+            ModelUsageStats = $null
         }
         
         $script:SentenceMetrics = @()
