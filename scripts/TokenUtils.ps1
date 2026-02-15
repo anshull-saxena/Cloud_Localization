@@ -23,7 +23,7 @@ function Get-LocalizationConfig {
         [string]$ConfigPath = "config.json"
     )
     
-    $configFullPath = Join-Path -Path (Resolve-Path "$PSScriptRoot\..").Path -ChildPath $ConfigPath
+    $configFullPath = Join-Path -Path (Split-Path $PSScriptRoot -Parent) -ChildPath $ConfigPath
     
     if (Test-Path -Path $configFullPath) {
         return Get-Content -Path $configFullPath | ConvertFrom-Json

@@ -17,17 +17,53 @@ jobs:
         inputs:
           targetType: 'inline'
           script: |
-            Write-Host "Installing NuGet package provider..."
-            Install-PackageProvider -Name NuGet -Force -Scope CurrentUser
-            
             Write-Host "Installing Az.Storage module..."
-            Install-Module -Name Az.Storage -Force -Scope CurrentUser -AllowClobber
+            Install-Module -Name Az.Storage -Force -Scope CurrentUser -AllowClobber -Repository PSGallery
             
             Write-Host "Installing SqlServer module..."
-            Install-Module -Name SqlServer -Force -Scope CurrentUser -AllowClobber
+            Install-Module -Name SqlServer -Force -Scope CurrentUser -AllowClobber -Repository PSGallery
             
             Write-Host "Modules installed successfully"
+            Get-Module -ListAvailable Az.Storage, SqlServer | Format-Table Name, Version
           pwsh: true
+
+      - task: PowerShell@2
+        displayName: 'Inject Secrets into Config'
+        inputs:
+          targetType: 'inline'
+          script: |
+            $configPath = "config.json"
+            Write-Host "Reading config from: $configPath"
+            
+            if (Test-Path $configPath) {
+              $config = Get-Content $configPath | ConvertFrom-Json
+              
+              # Only inject if environment variables are set (for local dev, use existing values)
+              if ($env:AZURE_STORAGE_CONN) {
+                Write-Host "Injecting Azure Storage connection string..."
+                $config.ConnectionString = $env:AZURE_STORAGE_CONN
+              }
+              
+              if ($env:AZURE_SQL_CONN) {
+                Write-Host "Injecting SQL connection string..."
+                $config.SQLConnectionString = $env:AZURE_SQL_CONN
+              }
+              
+              if ($env:AZURE_COG_API_KEY) {
+                Write-Host "Injecting Azure Cognitive Services API key..."
+                $config.AzureCognitiveServiceAPIKey = $env:AZURE_COG_API_KEY
+              }
+              
+              $config | ConvertTo-Json -Depth 10 | Set-Content $configPath
+              Write-Host "Config updated successfully"
+            } else {
+              Write-Warning "Config file not found at $configPath"
+            }
+          pwsh: true
+        env:
+          AZURE_STORAGE_CONN: $(AZURE_STORAGE_CONN)
+          AZURE_SQL_CONN: $(AZURE_SQL_CONN)
+          AZURE_COG_API_KEY: $(AZURE_COG_API_KEY)
 
       - task: PowerShell@2
         displayName: 'Run Function1 - Extract & Upload'
@@ -42,3 +78,11 @@ jobs:
           filePath: 'scripts/function2.ps1'
           pwsh: true
         continueOnError: true
+        
+      - task: PublishBuildArtifacts@1
+        displayName: 'Publish Logs'
+        condition: always()
+        inputs:
+          PathtoPublish: 'logs'
+          ArtifactName: 'logs'
+          publishLocation: 'Container'

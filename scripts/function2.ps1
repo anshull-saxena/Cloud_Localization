@@ -1,12 +1,19 @@
 param($Timer)
 
 # Import new utility modules
-. "$PSScriptRoot\TokenUtils.ps1"
-. "$PSScriptRoot\ModelRouter.ps1"
-. "$PSScriptRoot\InfraRouter.ps1"
-. "$PSScriptRoot\SLALogger.ps1"
+. (Join-Path $PSScriptRoot "TokenUtils.ps1")
+. (Join-Path $PSScriptRoot "ModelRouter.ps1")
+. (Join-Path $PSScriptRoot "InfraRouter.ps1")
+. (Join-Path $PSScriptRoot "SLALogger.ps1")
 
-$config = Get-Content -Path "config.json" | ConvertFrom-Json
+$configPath = Join-Path (Split-Path $PSScriptRoot -Parent) "config.json"
+$config = Get-Content -Path $configPath | ConvertFrom-Json
+
+# Ensure logs directory exists
+$logsDir = Join-Path (Split-Path $PSScriptRoot -Parent) "logs"
+if (!(Test-Path -Path $logsDir)) {
+    New-Item -ItemType Directory -Path $logsDir | Out-Null
+}
 
 Import-Module Az.Storage
 Import-Module SqlServer
@@ -17,7 +24,7 @@ $azureCogSvcTranslateAPIKey = $config.AzureCognitiveServiceAPIKey
 $azureRegion = $config.AzureRegion
 $sqlConnectionString = $config.SQLConnectionString
 
-$outputFolderPath = Join-Path -Path (Resolve-Path "$PSScriptRoot\..").Path -ChildPath $config.TargetRepoPath
+$outputFolderPath = Join-Path -Path (Split-Path $PSScriptRoot -Parent) -ChildPath $config.TargetRepoPath
 if (!(Test-Path -Path $outputFolderPath)) {
     New-Item -ItemType Directory -Path $outputFolderPath | Out-Null
 }
@@ -234,7 +241,7 @@ function Convert-XLIFFToResx {
 }
 
 try {
-    cd (Resolve-Path "$PSScriptRoot\..").Path
+    Set-Location (Split-Path $PSScriptRoot -Parent)
     git checkout main
     git pull origin main --rebase
 

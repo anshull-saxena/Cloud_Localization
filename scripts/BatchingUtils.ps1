@@ -19,7 +19,7 @@
 #>
 
 # Import dependencies
-. "$PSScriptRoot\TokenUtils.ps1"
+. (Join-Path $PSScriptRoot "TokenUtils.ps1")
 
 <#
 .SYNOPSIS

@@ -1,11 +1,18 @@
 param($Timer)
 
 # Import new utility modules
-. "$PSScriptRoot\TokenUtils.ps1"
-. "$PSScriptRoot\BatchingUtils.ps1"
-. "$PSScriptRoot\SLALogger.ps1"
+. (Join-Path $PSScriptRoot "TokenUtils.ps1")
+. (Join-Path $PSScriptRoot "BatchingUtils.ps1")
+. (Join-Path $PSScriptRoot "SLALogger.ps1")
 
-$config = Get-Content -Path "config.json" | ConvertFrom-Json
+$configPath = Join-Path (Split-Path $PSScriptRoot -Parent) "config.json"
+$config = Get-Content -Path $configPath | ConvertFrom-Json
+
+# Ensure logs directory exists
+$logsDir = Join-Path (Split-Path $PSScriptRoot -Parent) "logs"
+if (!(Test-Path -Path $logsDir)) {
+    New-Item -ItemType Directory -Path $logsDir | Out-Null
+}
 
 try {
     Import-Module Az.Storage -ErrorAction Stop
@@ -14,7 +21,7 @@ try {
     exit
 }
 
-$sourceRepoPath = Join-Path -Path (Resolve-Path "$PSScriptRoot\..").Path -ChildPath $config.SourceRepoPath
+$sourceRepoPath = Join-Path -Path (Split-Path $PSScriptRoot -Parent) -ChildPath $config.SourceRepoPath
 $destinationContainerName = $config.TempContainerName
 $connectionString = $config.ConnectionString
 $targetLanguages = $config.TargetLanguages
