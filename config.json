@@ -7,5 +7,40 @@
     "AzureRegion": "eastus",
     "SourceRepoPath": "source-folder",
     "TargetRepoPath": "target-folder",
-    "SQLConnectionString": "Server=tcp:cloudlocalizationserver.database.windows.net,1433;Initial Catalog=cloudLocalisationDatabase;Persist Security Info=False;User ID=ayush;Password=Abcd@1234;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+    "SQLConnectionString": "Server=tcp:cloudlocalizationserver.database.windows.net,1433;Initial Catalog=cloudLocalisationDatabase;Persist Security Info=False;User ID=ayush;Password=Abcd@1234;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
+    
+    "_comment_tokenization": "Token counting and sentence characterization settings",
+    "TokenizationMethod": "CharacterBased",
+    "SmallSentenceThreshold": 100,
+    "TokenizerAPIEndpoint": "",
+    
+    "_comment_batching": "Adaptive batch sizing configuration",
+    "MaxTokenBatch": 2000,
+    "EnableAdaptiveBatching": true,
+    
+    "_comment_model_routing": "Hybrid NMT/LLM model routing (disabled by default until endpoints configured)",
+    "EnableModelRouting": false,
+    "NMTEndpoint": "",
+    "NMTAPIKey": "",
+    "LLMEndpoint": "",
+    "LLMAPIKey": "",
+    "LLMModelName": "gpt-4",
+    "SmallSentenceModel": "NMT",
+    "LargeSentenceModel": "LLM",
+    
+    "_comment_infra_routing": "Optional VM vs Serverless infrastructure routing (disabled by default)",
+    "EnableInfraRouting": false,
+    "VMEndpoint": "",
+    "VMAPIKey": "",
+    "ServerlessEndpoint": "",
+    "ServerlessAPIKey": "",
+    "ConcurrencyThreshold": 10,
+    "TokenLoadThreshold": 50000,
+    
+    "_comment_sla_logging": "SLA-aware performance tracking and logging",
+    "EnableSLALogging": true,
+    "SLADeadlineSeconds": 3600,
+    "SLALogPath": "logs/sla-metrics.json",
+    "LogPerSentenceMetrics": true,
+    "LogPerLanguageMetrics": true
 }

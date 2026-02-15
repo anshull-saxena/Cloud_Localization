@@ -1,5 +1,11 @@
 param($Timer)
 
+# Import new utility modules
+. "$PSScriptRoot\TokenUtils.ps1"
+. "$PSScriptRoot\ModelRouter.ps1"
+. "$PSScriptRoot\InfraRouter.ps1"
+. "$PSScriptRoot\SLALogger.ps1"
+
 $config = Get-Content -Path "config.json" | ConvertFrom-Json
 
 Import-Module Az.Storage
@@ -14,6 +20,20 @@ $sqlConnectionString = $config.SQLConnectionString
 $outputFolderPath = Join-Path -Path (Resolve-Path "$PSScriptRoot\..").Path -ChildPath $config.TargetRepoPath
 if (!(Test-Path -Path $outputFolderPath)) {
     New-Item -ItemType Directory -Path $outputFolderPath | Out-Null
+}
+
+# Extract new configuration parameters with defaults
+$enableModelRouting = if ($config.EnableModelRouting -ne $null) { $config.EnableModelRouting } else { $false }
+$enableInfraRouting = if ($config.EnableInfraRouting -ne $null) { $config.EnableInfraRouting } else { $false }
+$enableSLALogging = if ($config.EnableSLALogging -ne $null) { $config.EnableSLALogging } else { $true }
+$smallThreshold = if ($config.SmallSentenceThreshold) { $config.SmallSentenceThreshold } else { 100 }
+$tokenizationMethod = if ($config.TokenizationMethod) { $config.TokenizationMethod } else { "CharacterBased" }
+
+# Initialize SLA logging if enabled
+if ($enableSLALogging) {
+    $runId = "function2-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    Start-LocalizationRun -RunId $runId -Config $config | Out-Null
+    Write-Host "Started SLA tracking for run: $runId"
 }
 
 $storageContext = New-AzStorageContext -ConnectionString $connectionString
@@ -92,14 +112,88 @@ function GetTranslation {
         [string]$TextToTranslate,
         [string]$SourceLanguage,
         [string]$TargetLanguage,
-        [string]$TargetCultureID
+        [string]$TargetCultureID,
+        [string]$SentenceId = ""
     )
 
+    # Check translation memory cache first
     $cachedTranslation = GetTranslationFromMemory -TextToTranslate $TextToTranslate -TargetCultureID $TargetCultureID
     if ($cachedTranslation) {
+        # Log cache hit if SLA logging enabled
+        if ($enableSLALogging -and ![string]::IsNullOrWhiteSpace($SentenceId)) {
+            Add-SentenceMetric `
+                -SentenceId $SentenceId `
+                -Text $TextToTranslate `
+                -TokenCount 0 `
+                -ModelUsed "Cache" `
+                -InfrastructureUsed "Cache" `
+                -LatencyMs 0 `
+                -SourceLanguage $SourceLanguage `
+                -TargetLanguage $TargetLanguage | Out-Null
+        }
         return $cachedTranslation
     }
 
+    $translationStartTime = Get-Date
+    
+    # Use model routing if enabled, otherwise use default NMT
+    if ($enableModelRouting) {
+        try {
+            $result = Invoke-TranslationWithRouting `
+                -Text $TextToTranslate `
+                -SourceLanguage $SourceLanguage `
+                -TargetLanguage $TargetLanguage `
+                -EnableModelRouting $true `
+                -SmallThreshold $smallThreshold `
+                -Config $config
+            
+            $translatedText = $result.TranslatedText
+            $modelUsed = $result.ModelUsed
+            $latencyMs = $result.Duration
+            $tokenCount = $result.TokenCount
+        } catch {
+            Write-Warning "Model routing failed, falling back to default NMT: $_"
+            # Fallback to default translation
+            $translatedText = InvokeDefaultTranslation -TextToTranslate $TextToTranslate -SourceLanguage $SourceLanguage -TargetLanguage $TargetLanguage
+            $modelUsed = "NMT (fallback)"
+            $latencyMs = ((Get-Date) - $translationStartTime).TotalMilliseconds
+            $tokenCount = Get-TokenCount -Text $TextToTranslate -Method $tokenizationMethod
+        }
+    } else {
+        # Use default translation (existing Azure Cognitive Services)
+        $translatedText = InvokeDefaultTranslation -TextToTranslate $TextToTranslate -SourceLanguage $SourceLanguage -TargetLanguage $TargetLanguage
+        $modelUsed = "NMT (default)"
+        $latencyMs = ((Get-Date) - $translationStartTime).TotalMilliseconds
+        $tokenCount = Get-TokenCount -Text $TextToTranslate -Method $tokenizationMethod
+    }
+    
+    # Save to translation memory
+    SaveTranslationToMemory -TextToTranslate $TextToTranslate -TranslatedText $translatedText -TargetCultureID $TargetCultureID
+    
+    # Log sentence metric if SLA logging enabled
+    if ($enableSLALogging -and ![string]::IsNullOrWhiteSpace($SentenceId)) {
+        Add-SentenceMetric `
+            -SentenceId $SentenceId `
+            -Text $TextToTranslate `
+            -TokenCount $tokenCount `
+            -ModelUsed $modelUsed `
+            -InfrastructureUsed "Default" `
+            -LatencyMs $latencyMs `
+            -SourceLanguage $SourceLanguage `
+            -TargetLanguage $TargetLanguage | Out-Null
+    }
+
+    return $translatedText
+}
+
+# Helper function for default translation (existing Azure Cognitive Services)
+function InvokeDefaultTranslation {
+    param (
+        [string]$TextToTranslate,
+        [string]$SourceLanguage,
+        [string]$TargetLanguage
+    )
+    
     $translationServiceURI = "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=$($SourceLanguage)&to=$($TargetLanguage)"
 
     $RecoRequestHeader = @{
@@ -112,10 +206,7 @@ function GetTranslation {
 
     $RecoResponse = Invoke-RestMethod -Method POST -Uri $translationServiceURI -Headers $RecoRequestHeader -Body "[$TextBody]"
 
-    $translatedText = $RecoResponse.translations[0].text
-    SaveTranslationToMemory -TextToTranslate $TextToTranslate -TranslatedText $translatedText -TargetCultureID $TargetCultureID
-
-    return $translatedText
+    return $RecoResponse.translations[0].text
 }
 
 function Convert-XLIFFToResx {
@@ -131,7 +222,7 @@ function Convert-XLIFFToResx {
         $id = $transUnitNode.id
         $sourceContent = $transUnitNode.source.InnerXml -replace '^\s*<\!\[CDATA\[', '' -replace '\]\]>\s*$'
 
-        $translatedContent = [string](GetTranslation -TextToTranslate $sourceContent -SourceLanguage "en" -TargetLanguage $TargetLanguage -TargetCultureID $TargetLanguage)
+        $translatedContent = [string](GetTranslation -TextToTranslate $sourceContent -SourceLanguage "en" -TargetLanguage $TargetLanguage -TargetCultureID $TargetLanguage -SentenceId $id)
         $translatedContent = $translatedContent.Replace("@TextToTranslate @TargetCultureID @TextToTranslate @TargetCultureID @SourceID @TranslatedText 1 ", "")
 
         $resxContent += "<data name='$id' xml:lang='$TargetLanguage' xml:space='preserve'><value>$translatedContent</value></data>"
@@ -148,6 +239,8 @@ try {
     git pull origin main --rebase
 
     $blobs = Get-AzStorageBlob -Container $inputContainerName -Context $storageContext
+    $languageStartTimes = @{}
+    
     foreach ($blob in $blobs) {
         if ($blob.Name -like "*.xliff") {
             Write-Host "Processing file: $($blob.Name)"
@@ -157,6 +250,11 @@ try {
 
             $xliffContent = [xml](Get-Content -Path $tempFile.FullName -Raw)
             $targetLanguage = $xliffContent.xliff.file.'target-language'
+            
+            # Track language start time
+            if (!$languageStartTimes.ContainsKey($targetLanguage)) {
+                $languageStartTimes[$targetLanguage] = Get-Date
+            }
 
             $resxContent = Convert-XLIFFToResx -XLIFFContent $xliffContent -TargetLanguage $targetLanguage
             $baseName = [System.IO.Path]::GetFileNameWithoutExtension($blob.Name)
@@ -170,6 +268,14 @@ try {
         }
     }
     Write-Host "Translation and conversion process completed."
+    
+    # Complete SLA logging if enabled
+    if ($enableSLALogging) {
+        Complete-LocalizationRun -SLADeadlineSeconds $config.SLADeadlineSeconds | Out-Null
+        
+        $slaLogPath = if ($config.SLALogPath) { $config.SLALogPath } else { "logs/sla-metrics-function2.json" }
+        Export-SLAReport -OutputPath $slaLogPath -IncludeSentenceMetrics $config.LogPerSentenceMetrics -IncludeLanguageMetrics $config.LogPerLanguageMetrics | Out-Null
+    }
 
     git checkout main
     git add .
