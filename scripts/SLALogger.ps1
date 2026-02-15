@@ -65,11 +65,14 @@ function Start-LocalizationRun {
             StartTime = Get-Date
             EndTime = $null
             Duration = $null
+            DurationSeconds = $null
             ConfigSnapshot = $Config
             Status = "Running"
             TotalSentences = 0
             TotalLanguages = 0
             TotalTokens = 0
+            SLAViolation = $false
+            Throughput = 0
         }
         
         $script:SentenceMetrics = @()
