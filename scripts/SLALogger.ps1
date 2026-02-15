@@ -76,6 +76,7 @@ function Start-LocalizationRun {
             Throughput = 0
             LatencyPercentiles = $null
             ModelUsageStats = $null
+            InfraUsageStats = $null
         }
         
         $script:SentenceMetrics = @()
