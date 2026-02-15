@@ -1,7 +1,7 @@
 {
-    "StorageAccountName": "cloudlocalizationstorage",
+    "StorageAccountName": "cloudlocalization",
     "TempContainerName": "xliff-temp-files",
-    "ConnectionString": "DefaultEndpointsProtocol=https;AccountName=cloudlocalizationstorage;AccountKey=5fSpWeghTLLgkIYx1D36b6i/8/6s40/7vE4rjglpTpHOze4NUu6ADJk6W70ca9xXagM7/ePI4Lqa+AStDYW5Ug==;EndpointSuffix=core.windows.net",
+    "ConnectionString": "DefaultEndpointsProtocol=https;AccountName=cloudlocalization;AccountKey=YOUR_KEY_HERE;EndpointSuffix=core.windows.net",
     "TargetLanguages": ["fr-FR", "es-ES", "hi-IN", "de-DE", "ja-JP", "ta-IN", "te-IN", "kn-IN", "bn-IN", "mr-IN"],
     "AzureCognitiveServiceAPIKey": "EEEMrX5mJ6DudbrLBwWUZYeEWmg5pZpIuSMS22pn0eNVz8KDmJvMJQQJ99AKACYeBjFXJ3w3AAAbACOGuJOj",
     "AzureRegion": "eastus",
