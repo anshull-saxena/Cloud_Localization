@@ -7,7 +7,7 @@
     "AzureRegion": "centralindia",
     "SourceRepoPath": "source-folder",
     "TargetRepoPath": "target-folder",
-    "SQLConnectionString": "Server=tcp:cloudlocalization.database.windows.net,1433;Initial Catalog=cloudlocal;Persist Security Info=False;User ID={your_username};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Authentication=\"Active Directory Integrated\";",
+    "SQLConnectionString": "Server=tcp:cloudlocalization.database.windows.net,1433;Initial Catalog=cloudlocal;Persist Security Info=False;User ID=local;Password=cloudABCDEF@123;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
     
     "_comment_tokenization": "Token counting and sentence characterization settings",
     "TokenizationMethod": "CharacterBased",
