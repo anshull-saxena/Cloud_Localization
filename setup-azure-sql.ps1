@@ -157,5 +157,90 @@ try {
     Write-Host "You may need to add your IP address to the firewall rules" -ForegroundColor Yellow
 }
 
+# Create database schema
+Write-Host ""
+Write-Host "Creating database schema (tables)..." -ForegroundColor Yellow
+
+$schemaSQL = @"
+-- Create SourceText table
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'SourceText')
+BEGIN
+    CREATE TABLE SourceText (
+        SourceID INT IDENTITY(1,1) PRIMARY KEY,
+        SourceText NVARCHAR(MAX) NOT NULL,
+        TargetCultureID NVARCHAR(10) NOT NULL,
+        CreatedAt DATETIME2 NOT NULL DEFAULT GETDATE()
+    );
+    CREATE INDEX IX_SourceText_Culture ON SourceText(TargetCultureID);
+    PRINT 'Created SourceText table';
+END
+ELSE
+BEGIN
+    PRINT 'SourceText table already exists';
+END
+
+-- Create TargetText table
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'TargetText')
+BEGIN
+    CREATE TABLE TargetText (
+        TargetID INT IDENTITY(1,1) PRIMARY KEY,
+        SourceID INT NOT NULL,
+        TranslatedText NVARCHAR(MAX) NOT NULL,
+        UpdatedAt DATETIME2 NOT NULL DEFAULT GETDATE(),
+        CONSTRAINT FK_TargetText_SourceText FOREIGN KEY (SourceID) REFERENCES SourceText(SourceID) ON DELETE CASCADE
+    );
+    CREATE INDEX IX_TargetText_SourceID ON TargetText(SourceID);
+    PRINT 'Created TargetText table';
+END
+ELSE
+BEGIN
+    PRINT 'TargetText table already exists';
+END
+
+SELECT TABLE_NAME, (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = t.TABLE_NAME) AS ColumnCount
+FROM INFORMATION_SCHEMA.TABLES t
+WHERE TABLE_TYPE = 'BASE TABLE'
+ORDER BY TABLE_NAME;
+"@
+
+try {
+    $connection = New-Object System.Data.SqlClient.SqlConnection
+    $connection.ConnectionString = $connectionString
+    $connection.Open()
+    
+    $command = $connection.CreateCommand()
+    $command.CommandText = $schemaSQL
+    $command.CommandTimeout = 60
+    
+    $reader = $command.ExecuteReader()
+    
+    # Read all result sets
+    do {
+        while ($reader.Read()) {
+            $tableName = $reader["TABLE_NAME"]
+            $columnCount = $reader["ColumnCount"]
+            Write-Host "  ✓ Table: $tableName ($columnCount columns)" -ForegroundColor Cyan
+        }
+    } while ($reader.NextResult())
+    
+    $reader.Close()
+    $connection.Close()
+    
+    Write-Host "✓ Database schema created successfully!" -ForegroundColor Green
+    
+} catch {
+    Write-Warning "Failed to create schema: $_"
+    Write-Host "You can create the schema manually using Azure Portal Query Editor" -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "✓✓✓ SETUP COMPLETE! ✓✓✓" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "Add this to Azure DevOps Pipeline Variables:" -ForegroundColor Cyan
+Write-Host "Variable Name: AZURE_SQL_CONN" -ForegroundColor White
+Write-Host "Value: (copy from above)" -ForegroundColor White
+Write-Host "Type: Secret ✓" -ForegroundColor White
 Write-Host ""
 Write-Host "Estimated monthly cost: ~$5-10 USD (Basic tier)" -ForegroundColor Cyan

@@ -24,6 +24,25 @@ $azureCogSvcTranslateAPIKey = $config.AzureCognitiveServiceAPIKey
 $azureRegion = $config.AzureRegion
 $sqlConnectionString = $config.SQLConnectionString
 
+# Test SQL connection availability
+$script:SqlAvailable = $false
+if (![string]::IsNullOrWhiteSpace($sqlConnectionString)) {
+    try {
+        $testConnection = New-Object System.Data.SqlClient.SqlConnection
+        $testConnection.ConnectionString = $sqlConnectionString
+        $testConnection.Open()
+        $testConnection.Close()
+        $script:SqlAvailable = $true
+        Write-Host "✓ Translation memory (SQL) is available and connected." -ForegroundColor Green
+    } catch {
+        Write-Warning "Translation memory (SQL) is not available. Translations will be done without caching."
+        Write-Warning "  Error: $($_.Exception.Message)"
+        $script:SqlAvailable = $false
+    }
+} else {
+    Write-Host "Translation memory (SQL) is not configured. Proceeding without caching." -ForegroundColor Yellow
+}
+
 $outputFolderPath = Join-Path -Path (Split-Path $PSScriptRoot -Parent) -ChildPath $config.TargetRepoPath
 if (!(Test-Path -Path $outputFolderPath)) {
     New-Item -ItemType Directory -Path $outputFolderPath | Out-Null
@@ -51,8 +70,8 @@ function GetTranslationFromMemory {
         [string]$TargetCultureID
     )
     
-    # Skip if SQL connection string is not configured
-    if ([string]::IsNullOrWhiteSpace($sqlConnectionString)) {
+    # Skip if SQL is not available
+    if (!$script:SqlAvailable) {
         return $null
     }
 
@@ -80,7 +99,7 @@ function GetTranslationFromMemory {
 
         return $result
     } catch {
-        Write-Warning "Translation memory lookup failed: $_"
+        # Silently fail - SQL is optional
         return $null
     }
 }
@@ -92,8 +111,8 @@ function SaveTranslationToMemory {
         [string]$TargetCultureID
     )
     
-    # Skip if SQL connection string is not configured
-    if ([string]::IsNullOrWhiteSpace($sqlConnectionString)) {
+    # Skip if SQL is not available
+    if (!$script:SqlAvailable) {
         return
     }
 
@@ -129,7 +148,7 @@ function SaveTranslationToMemory {
         $targetCommand.ExecuteNonQuery()
         $connection.Close()
     } catch {
-        Write-Warning "Failed to save translation to memory: $_"
+        # Silently fail - SQL is optional
     }
 }
 
