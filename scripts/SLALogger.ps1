@@ -320,8 +320,13 @@ function Complete-LocalizationRun {
         $script:CurrentRun.DurationSeconds = [Math]::Round($script:CurrentRun.Duration / 1000.0, 2)
         
         # Compute latency percentiles
-        $latencies = $script:SentenceMetrics | ForEach-Object { $_.LatencyMs }
-        $script:CurrentRun.LatencyPercentiles = Get-LatencyPercentiles -Latencies $latencies
+        $latencies = @($script:SentenceMetrics | ForEach-Object { $_.LatencyMs })
+        if ($latencies.Count -gt 0) {
+            $script:CurrentRun.LatencyPercentiles = Get-LatencyPercentiles -Latencies $latencies
+        } else {
+            # No latency data available (e.g., Function1 which doesn't do translation)
+            $script:CurrentRun.LatencyPercentiles = $null
+        }
         
         # Detect SLA violations
         $script:CurrentRun.SLADeadlineSeconds = $SLADeadlineSeconds

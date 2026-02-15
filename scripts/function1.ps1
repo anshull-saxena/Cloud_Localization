@@ -60,9 +60,15 @@ try {
     }
 
     $sourceFiles = Get-ChildItem -Path $sourceRepoPath -Filter "*.resx"
-    Write-Host "Found $($sourceFiles.Count) .resx files to process"
+    $totalFiles = $sourceFiles.Count
+    Write-Host "Found $totalFiles .resx files to process"
 
+    $fileCounter = 0
+    $processingStartTime = Get-Date
+    
     foreach ($sourceFile in $sourceFiles) {
+        $fileCounter++
+        $fileStartTime = Get-Date
         try {
             $resxContent = [xml](Get-Content -Path $sourceFile.FullName)
 
@@ -147,6 +153,22 @@ try {
                         -CompletionTimeMs $languageCompletionMs | Out-Null
                 }
             }
+            
+            # Calculate and display progress with time estimate
+            $fileEndTime = Get-Date
+            $elapsedTotal = ($fileEndTime - $processingStartTime).TotalSeconds
+            $avgTimePerFile = $elapsedTotal / $fileCounter
+            $filesRemaining = $totalFiles - $fileCounter
+            $estimatedSecondsRemaining = $avgTimePerFile * $filesRemaining
+            
+            $timeRemainingMsg = if ($estimatedSecondsRemaining -gt 60) {
+                "{0:N1} minutes" -f ($estimatedSecondsRemaining / 60)
+            } else {
+                "{0:N0} seconds" -f $estimatedSecondsRemaining
+            }
+            
+            Write-Host "Progress: [$fileCounter/$totalFiles] Completed $($sourceFile.Name) | Estimated time remaining: $timeRemainingMsg" -ForegroundColor Green
+            
         } catch {
             Write-Error "Failed to process file $($sourceFile.Name) for language ${language}: $_"
             Write-Host "Error details: $($_.Exception.Message)"
