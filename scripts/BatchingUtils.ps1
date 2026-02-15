@@ -366,12 +366,3 @@ function Get-OptimalBatchSize {
     
     return [Math]::Round($recommendedSize)
 }
-
-# Export module functions
-Export-ModuleMember -Function @(
-    'New-AdaptiveBatch',
-    'Get-BatchMetrics',
-    'Export-BatchInfo',
-    'Test-BatchConfiguration',
-    'Get-OptimalBatchSize'
-)

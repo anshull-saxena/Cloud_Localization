@@ -363,14 +363,3 @@ function Export-InfraRoutingStatistics {
         return $false
     }
 }
-
-# Export module functions
-Export-ModuleMember -Function @(
-    'Get-CurrentConcurrentRequests',
-    'Get-CurrentTokenLoad',
-    'Register-TranslationRequest',
-    'Unregister-TranslationRequest',
-    'Get-InfrastructureRoute',
-    'Invoke-TranslationOnInfra',
-    'Export-InfraRoutingStatistics'
-)

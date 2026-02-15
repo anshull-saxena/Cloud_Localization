@@ -306,12 +306,3 @@ function Get-TokenStatistics {
     
     return $stats
 }
-
-# Export module functions
-Export-ModuleMember -Function @(
-    'Get-LocalizationConfig',
-    'Get-TokenCount',
-    'Get-SentenceCharacterization',
-    'Get-BatchSentenceCharacterization',
-    'Get-TokenStatistics'
-)

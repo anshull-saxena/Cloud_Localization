@@ -464,14 +464,3 @@ function Get-CurrentRunStatus {
         [System.Threading.Monitor]::Exit($script:RunLock)
     }
 }
-
-# Export module functions
-Export-ModuleMember -Function @(
-    'Start-LocalizationRun',
-    'Add-SentenceMetric',
-    'Add-LanguageMetric',
-    'Get-LatencyPercentiles',
-    'Complete-LocalizationRun',
-    'Export-SLAReport',
-    'Get-CurrentRunStatus'
-)

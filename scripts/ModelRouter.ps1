@@ -474,12 +474,3 @@ function Export-RoutingStatistics {
         return $false
     }
 }
-
-# Export module functions
-Export-ModuleMember -Function @(
-    'Get-ModelRoute',
-    'Invoke-NMTTranslation',
-    'Invoke-LLMTranslation',
-    'Invoke-TranslationWithRouting',
-    'Export-RoutingStatistics'
-)
