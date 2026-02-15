@@ -50,16 +50,22 @@ function GetTranslationFromMemory {
         [string]$TextToTranslate,
         [string]$TargetCultureID
     )
-
-    $query = "SELECT tt.TranslatedText FROM SourceText st JOIN TargetText tt ON st.SourceID = tt.SourceID WHERE st.SourceText = @TextToTranslate AND st.TargetCultureID = @TargetCultureID"
     
-    $params = @{
-        TextToTranslate = $TextToTranslate
-        TargetCultureID = $TargetCultureID
+    # Skip if SQL connection string is not configured
+    if ([string]::IsNullOrWhiteSpace($sqlConnectionString)) {
+        return $null
     }
 
-    $connection = New-Object System.Data.SqlClient.SqlConnection
-    $connection.ConnectionString = $sqlConnectionString
+    try {
+        $query = "SELECT tt.TranslatedText FROM SourceText st JOIN TargetText tt ON st.SourceID = tt.SourceID WHERE st.SourceText = @TextToTranslate AND st.TargetCultureID = @TargetCultureID"
+        
+        $params = @{
+            TextToTranslate = $TextToTranslate
+            TargetCultureID = $TargetCultureID
+        }
+
+        $connection = New-Object System.Data.SqlClient.SqlConnection
+        $connection.ConnectionString = $sqlConnectionString
     $command = $connection.CreateCommand()
     $command.CommandText = $query
 
@@ -68,11 +74,15 @@ function GetTranslationFromMemory {
         $sqlParam.Value = $params[$param]
     }
 
-    $connection.Open()
-    $result = $command.ExecuteScalar()
-    $connection.Close()
+        $connection.Open()
+        $result = $command.ExecuteScalar()
+        $connection.Close()
 
-    return $result
+        return $result
+    } catch {
+        Write-Warning "Translation memory lookup failed: $_"
+        return $null
+    }
 }
 
 function SaveTranslationToMemory {
@@ -81,10 +91,16 @@ function SaveTranslationToMemory {
         [string]$TranslatedText,
         [string]$TargetCultureID
     )
+    
+    # Skip if SQL connection string is not configured
+    if ([string]::IsNullOrWhiteSpace($sqlConnectionString)) {
+        return
+    }
 
-    $connection = New-Object System.Data.SqlClient.SqlConnection
-    $connection.ConnectionString = $sqlConnectionString
-    $connection.Open()
+    try {
+        $connection = New-Object System.Data.SqlClient.SqlConnection
+        $connection.ConnectionString = $sqlConnectionString
+        $connection.Open()
 
     $checkSourceQuery = "SELECT SourceID FROM SourceText WHERE SourceText = @TextToTranslate AND TargetCultureID = @TargetCultureID"
     $checkCommand = $connection.CreateCommand()
@@ -110,8 +126,11 @@ function SaveTranslationToMemory {
     $targetCommand.Parameters.AddWithValue("@SourceID", $sourceID)
     $targetCommand.Parameters.AddWithValue("@TranslatedText", $TranslatedText)
 
-    $targetCommand.ExecuteNonQuery()
-    $connection.Close()
+        $targetCommand.ExecuteNonQuery()
+        $connection.Close()
+    } catch {
+        Write-Warning "Failed to save translation to memory: $_"
+    }
 }
 
 function GetTranslation {
@@ -241,11 +260,12 @@ function Convert-XLIFFToResx {
 }
 
 try {
-    Set-Location (Split-Path $PSScriptRoot -Parent)
-    git checkout main
-    git pull origin main --rebase
-
     $blobs = Get-AzStorageBlob -Container $inputContainerName -Context $storageContext
+    $totalBlobs = ($blobs | Where-Object { $_.Name -like "*.xliff" }).Count
+    Write-Host "Found $totalBlobs XLIFF files to translate"
+    
+    $blobCounter = 0
+    $processingStartTime = Get-Date
     $languageStartTimes = @{}
     
     foreach ($blob in $blobs) {
@@ -272,6 +292,22 @@ try {
             Write-Host "Saved translated .resx file to: $outputFilePath"
 
             Remove-Item -Path $tempFile.FullName -Force
+            
+            # Calculate and display progress with time estimate
+            $blobCounter++
+            $blobEndTime = Get-Date
+            $elapsedTotal = ($blobEndTime - $processingStartTime).TotalSeconds
+            $avgTimePerBlob = $elapsedTotal / $blobCounter
+            $blobsRemaining = $totalBlobs - $blobCounter
+            $estimatedSecondsRemaining = $avgTimePerBlob * $blobsRemaining
+            
+            $timeRemainingMsg = if ($estimatedSecondsRemaining -gt 60) {
+                "{0:N1} minutes" -f ($estimatedSecondsRemaining / 60)
+            } else {
+                "{0:N0} seconds" -f $estimatedSecondsRemaining
+            }
+            
+            Write-Host "Progress: [$blobCounter/$totalBlobs] Completed $($blob.Name) | Estimated time remaining: $timeRemainingMsg" -ForegroundColor Green
         }
     }
     Write-Host "Translation and conversion process completed."
@@ -284,12 +320,7 @@ try {
         Export-SLAReport -OutputPath $slaLogPath -IncludeSentenceMetrics $config.LogPerSentenceMetrics -IncludeLanguageMetrics $config.LogPerLanguageMetrics | Out-Null
     }
 
-    git checkout main
-    git add .
-    git commit -m "Add translated .resx files to target folder after successful pipeline execution"
-    git push origin main
-
-    Write-Host "Successfully pushed the target folder to Azure repo."
+    Write-Host "Translation and conversion process completed successfully."
 }
 catch {
     Write-Host "Error occurred: $_"
