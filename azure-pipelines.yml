@@ -28,17 +28,17 @@ jobs:
             
             Write-Host "Modules installed successfully"
           pwsh: false 
-displayName: 'Run Function2 - Translate'
-        inputs:
-          filePath: 'scripts/function2.ps1'
-          pwsh: false
-        continueOnError: tru 'Run Function1 - Extract & Upload'
+
+      - task: PowerShell@2
+        displayName: 'Run Function1 - Extract & Upload'
         inputs:
           filePath: 'scripts/function1.ps1'
           pwsh: false
         continueOnError: true
 
       - task: PowerShell@2
+        displayName: 'Run Function2 - Translate'
         inputs:
           filePath: 'scripts/function2.ps1'
           pwsh: false
+        continueOnError: true
