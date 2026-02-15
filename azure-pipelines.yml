@@ -35,6 +35,11 @@ jobs:
             $configPath = "config.json"
             Write-Host "Checking for secret injection..."
             
+            # Debug: Show what we're receiving
+            Write-Host "DEBUG: AZURE_STORAGE_CONN length: $($env:AZURE_STORAGE_CONN.Length)"
+            Write-Host "DEBUG: AZURE_SQL_CONN length: $($env:AZURE_SQL_CONN.Length)"
+            Write-Host "DEBUG: AZURE_COG_API_KEY length: $($env:AZURE_COG_API_KEY.Length)"
+            
             if (Test-Path $configPath) {
               $config = Get-Content $configPath | ConvertFrom-Json
               $modified = $false
