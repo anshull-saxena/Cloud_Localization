@@ -28,34 +28,48 @@ jobs:
           pwsh: true
 
       - task: PowerShell@2
-        displayName: 'Inject Secrets into Config'
+        displayName: 'Inject Secrets into Config (Optional)'
         inputs:
           targetType: 'inline'
           script: |
             $configPath = "config.json"
-            Write-Host "Reading config from: $configPath"
+            Write-Host "Checking for secret injection..."
             
             if (Test-Path $configPath) {
               $config = Get-Content $configPath | ConvertFrom-Json
+              $modified = $false
               
-              # Only inject if environment variables are set (for local dev, use existing values)
-              if ($env:AZURE_STORAGE_CONN) {
+              # Only inject if environment variables are set AND not empty
+              if ($env:AZURE_STORAGE_CONN -and $env:AZURE_STORAGE_CONN -ne '$(AZURE_STORAGE_CONN)' -and $env:AZURE_STORAGE_CONN.Length -gt 0) {
                 Write-Host "Injecting Azure Storage connection string..."
                 $config.ConnectionString = $env:AZURE_STORAGE_CONN
+                $modified = $true
+              } else {
+                Write-Host "Using connection string from config.json"
               }
               
-              if ($env:AZURE_SQL_CONN) {
+              if ($env:AZURE_SQL_CONN -and $env:AZURE_SQL_CONN -ne '$(AZURE_SQL_CONN)' -and $env:AZURE_SQL_CONN.Length -gt 0) {
                 Write-Host "Injecting SQL connection string..."
                 $config.SQLConnectionString = $env:AZURE_SQL_CONN
+                $modified = $true
+              } else {
+                Write-Host "Using SQL connection string from config.json"
               }
               
-              if ($env:AZURE_COG_API_KEY) {
+              if ($env:AZURE_COG_API_KEY -and $env:AZURE_COG_API_KEY -ne '$(AZURE_COG_API_KEY)' -and $env:AZURE_COG_API_KEY.Length -gt 0) {
                 Write-Host "Injecting Azure Cognitive Services API key..."
                 $config.AzureCognitiveServiceAPIKey = $env:AZURE_COG_API_KEY
+                $modified = $true
+              } else {
+                Write-Host "Using API key from config.json"
               }
               
-              $config | ConvertTo-Json -Depth 10 | Set-Content $configPath
-              Write-Host "Config updated successfully"
+              if ($modified) {
+                $config | ConvertTo-Json -Depth 10 | Set-Content $configPath
+                Write-Host "Config updated with injected secrets"
+              } else {
+                Write-Host "No secrets to inject, using config.json values"
+              }
             } else {
               Write-Warning "Config file not found at $configPath"
             }
