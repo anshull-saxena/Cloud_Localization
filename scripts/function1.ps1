@@ -39,9 +39,21 @@ try {
         exit
     }
 
+    Write-Host "Creating Azure Storage context..."
     $context = New-AzStorageContext -ConnectionString $connectionString -ErrorAction Stop
+    
+    Write-Host "Checking if container '$destinationContainerName' exists..."
+    $containerExists = Get-AzStorageContainer -Name $destinationContainerName -Context $context -ErrorAction SilentlyContinue
+    if (-not $containerExists) {
+        Write-Host "Container does not exist. Creating container '$destinationContainerName'..."
+        New-AzStorageContainer -Name $destinationContainerName -Context $context -Permission Off -ErrorAction Stop
+        Write-Host "Container created successfully."
+    } else {
+        Write-Host "Container exists."
+    }
 
     $sourceFiles = Get-ChildItem -Path $sourceRepoPath -Filter "*.resx"
+    Write-Host "Found $($sourceFiles.Count) .resx files to process"
 
     foreach ($sourceFile in $sourceFiles) {
         try {
@@ -105,7 +117,14 @@ try {
                 $xliffFilePath = "xliff_$($sourceFile.BaseName)_$($language).xliff"
                 $xliffContent | Out-File -FilePath $xliffFilePath -Encoding UTF8
 
-                Set-AzStorageBlobContent -Container $destinationContainerName -File $xliffFilePath -Blob "$($sourceFile.BaseName)_$($language).xliff" -Context $context -Force -ErrorAction Stop
+                Write-Verbose "Uploading $xliffFilePath to blob storage..."
+                try {
+                    Set-AzStorageBlobContent -Container $destinationContainerName -File $xliffFilePath -Blob "$($sourceFile.BaseName)_$($language).xliff" -Context $context -Force -ErrorAction Stop
+                    Write-Verbose "Successfully uploaded $xliffFilePath"
+                } catch {
+                    Write-Error "Failed to upload $xliffFilePath to Azure Blob Storage: $_"
+                    throw
+                }
 
                 Remove-Item -Path $xliffFilePath -Force
                 
@@ -115,7 +134,11 @@ try {
                     $languageCompletionMs = ($languageEndTime - $languageStartTime).TotalMilliseconds
                     
                     Add-LanguageMetric `
-                        -LanguageCode $language `
+                        -LanguageCode $language `($sourceFile.Name) for language ${language}: $_"
+            Write-Host "Error details: $($_.Exception.Message)"
+            if ($_.Exception.InnerException) {
+                Write-Host "Inner exception: $($_.Exception.InnerException.Message)"
+            }
                         -SentenceCount $sentences.Count `
                         -TotalTokens $(if ($batchMetrics) { $batchMetrics.TotalTokens } else { 0 }) `
                         -CompletionTimeMs $languageCompletionMs | Out-Null

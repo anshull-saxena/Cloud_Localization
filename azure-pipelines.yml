@@ -13,19 +13,30 @@ jobs:
         persistCredentials: true
         
       - task: PowerShell@2
+        displayName: 'Install Required Modules'
         inputs:
           targetType: 'inline'
           script: |
-            #Install-PackageProvider -Name NuGet -Force -Confirm:$false -Scope CurrentUser
-            #Install-Module -Name Az.Storage -Force -Scope CurrentUser -AllowClobber -Confirm:$false
-            #Install-Module -Name Az.Storage -Force -Scope CurrentUser -AllowClobber
-            #Install-Module -Name SqlServer -Force -Scope CurrentUser -AllowClobber
+            Write-Host "Installing NuGet package provider..."
+            Install-PackageProvider -Name NuGet -Force -Scope CurrentUser
+            
+            Write-Host "Installing Az.Storage module..."
+            Install-Module -Name Az.Storage -Force -Scope CurrentUser -AllowClobber
+            
+            Write-Host "Installing SqlServer module..."
+            Install-Module -Name SqlServer -Force -Scope CurrentUser -AllowClobber
+            
+            Write-Host "Modules installed successfully"
           pwsh: false 
-
-      - task: PowerShell@2
+displayName: 'Run Function2 - Translate'
+        inputs:
+          filePath: 'scripts/function2.ps1'
+          pwsh: false
+        continueOnError: tru 'Run Function1 - Extract & Upload'
         inputs:
           filePath: 'scripts/function1.ps1'
           pwsh: false
+        continueOnError: true
 
       - task: PowerShell@2
         inputs:
