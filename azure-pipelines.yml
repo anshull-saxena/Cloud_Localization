@@ -39,30 +39,31 @@ jobs:
             Write-Host "DEBUG: AZURE_STORAGE_CONN length: $($env:AZURE_STORAGE_CONN.Length)"
             Write-Host "DEBUG: AZURE_SQL_CONN length: $($env:AZURE_SQL_CONN.Length)"
             Write-Host "DEBUG: AZURE_COG_API_KEY length: $($env:AZURE_COG_API_KEY.Length)"
+            Write-Host "DEBUG: AZURE_STORAGE_CONN starts with: $($env:AZURE_STORAGE_CONN.Substring(0, [Math]::Min(50, $env:AZURE_STORAGE_CONN.Length)))"
             
             if (Test-Path $configPath) {
               $config = Get-Content $configPath | ConvertFrom-Json
               $modified = $false
               
-              # Only inject if environment variables are set AND not empty
-              if ($env:AZURE_STORAGE_CONN -and $env:AZURE_STORAGE_CONN -ne '$(AZURE_STORAGE_CONN)' -and $env:AZURE_STORAGE_CONN.Length -gt 0) {
-                Write-Host "Injecting Azure Storage connection string..."
+              # Inject if environment variables have real values (not empty, not the variable placeholder)
+              if ($env:AZURE_STORAGE_CONN -and $env:AZURE_STORAGE_CONN.Length -gt 10) {
+                Write-Host "✓ Injecting Azure Storage connection string (length: $($env:AZURE_STORAGE_CONN.Length))"
                 $config.ConnectionString = $env:AZURE_STORAGE_CONN
                 $modified = $true
               } else {
                 Write-Host "Using connection string from config.json"
               }
               
-              if ($env:AZURE_SQL_CONN -and $env:AZURE_SQL_CONN -ne '$(AZURE_SQL_CONN)' -and $env:AZURE_SQL_CONN.Length -gt 0) {
-                Write-Host "Injecting SQL connection string..."
+              if ($env:AZURE_SQL_CONN -and $env:AZURE_SQL_CONN.Length -gt 10) {
+                Write-Host "✓ Injecting SQL connection string (length: $($env:AZURE_SQL_CONN.Length))"
                 $config.SQLConnectionString = $env:AZURE_SQL_CONN
                 $modified = $true
               } else {
                 Write-Host "Using SQL connection string from config.json"
               }
               
-              if ($env:AZURE_COG_API_KEY -and $env:AZURE_COG_API_KEY -ne '$(AZURE_COG_API_KEY)' -and $env:AZURE_COG_API_KEY.Length -gt 0) {
-                Write-Host "Injecting Azure Cognitive Services API key..."
+              if ($env:AZURE_COG_API_KEY -and $env:AZURE_COG_API_KEY.Length -gt 10) {
+                Write-Host "✓ Injecting Azure Cognitive Services API key (length: $($env:AZURE_COG_API_KEY.Length))"
                 $config.AzureCognitiveServiceAPIKey = $env:AZURE_COG_API_KEY
                 $modified = $true
               } else {
@@ -71,7 +72,7 @@ jobs:
               
               if ($modified) {
                 $config | ConvertTo-Json -Depth 10 | Set-Content $configPath
-                Write-Host "Config updated with injected secrets"
+                Write-Host "✓✓✓ Config updated with injected secrets ✓✓✓"
               } else {
                 Write-Host "No secrets to inject, using config.json values"
               }
