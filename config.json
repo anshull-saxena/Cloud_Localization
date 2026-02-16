@@ -7,7 +7,7 @@
     "AzureRegion": "centralindia",
     "SourceRepoPath": "source-folder",
     "TargetRepoPath": "target-folder",
-    "SQLConnectionString": "Server=tcp:cloudlocalization.database.windows.net,1433;Initial Catalog=cloudlocal;Persist Security Info=False;User ID=local;Password=cloudABCDEF@123;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
+    "SQLConnectionString":"DRIVER={ODBC Driver 18 for SQL Server};Server=tcp:cloudlocalization.database.windows.net,1433;Database=cloudlocal;UID=local;PWD=Azure@12345Sql;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;",
     
     "_comment_tokenization": "Token counting and sentence characterization settings",
     "TokenizationMethod": "CharacterBased",
