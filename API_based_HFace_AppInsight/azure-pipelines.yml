@@ -71,25 +71,66 @@ stages:
               APPINSIGHTS_CONNECTION_STRING: $(APPINSIGHTS_CONNECTION_STRING)
             displayName: "Install ODBC + Inject secrets"
 
-          # ✅ Pre-check SQL connectivity
+          # ✅ Robust & Debuggable SQL Pre-check
           - script: |
-              set -e
+              # Disable strict error checking momentarily so grep failures don't crash the script
+              set +e
               export PATH="$PATH:/opt/mssql-tools18/bin"
-              echo "Testing SQL connection..."
+              
+              echo "--- 🔍 DIAGNOSTIC START ---"
+              
+              # 1. Verify Variable Exists
+              if [ -z "$AZURE_SQL_CONN" ]; then
+                echo "❌ CRITICAL ERROR: AZURE_SQL_CONN is empty. Check Pipeline Library/Variables."
+                exit 1
+              else
+                echo "✅ AZURE_SQL_CONN is present (Length: ${#AZURE_SQL_CONN})."
+              fi
 
-              SERVER=$(echo $AZURE_SQL_CONN | sed -n 's/.*Server=tcp:\([^;]*\).*/\1/p')
-              DB=$(echo $AZURE_SQL_CONN | sed -n 's/.*Database=\([^;]*\).*/\1/p')
-              USER=$(echo $AZURE_SQL_CONN | sed -n 's/.*Uid=\([^;]*\).*/\1/p')
-              PASS=$(echo $AZURE_SQL_CONN | sed -n 's/.*Pwd=\([^;]*\).*/\1/p')
+              # 2. Extract SERVER (Case insensitive extraction)
+              # Tries to find 'Server=tcp:...' or 'SERVER=tcp:...'
+              SERVER=$(echo "$AZURE_SQL_CONN" | grep -oP -i 'Server=tcp:\K[^;]+' || echo "")
+              
+              # Fallback: If 'tcp:' wasn't in the string, try just 'Server='
+              if [ -z "$SERVER" ]; then
+                  echo "⚠️ Standard 'Server=tcp:' pattern not found. Trying generic 'Server='..."
+                  SERVER=$(echo "$AZURE_SQL_CONN" | grep -oP -i 'Server=\K[^;]+' || echo "")
+              fi
 
-              echo "Extracted values:"
-              echo "  SERVER=$SERVER"
-              echo "  DB=$DB"
-              echo "  USER=$USER"
-              echo "  PASS length: ${#PASS}"
+              # 3. Extract DATABASE
+              DB=$(echo "$AZURE_SQL_CONN" | grep -oP -i 'Database=\K[^;]+' || echo "")
+              
+              # 4. Extract USER (Try Uid or User ID)
+              USER=$(echo "$AZURE_SQL_CONN" | grep -oP -i 'Uid=\K[^;]+' || echo "")
+              if [ -z "$USER" ]; then
+                  USER=$(echo "$AZURE_SQL_CONN" | grep -oP -i 'User ID=\K[^;]+' || echo "")
+              fi
 
-              echo "Running SQLCMD..."
-              echo "SELECT @@VERSION;" | sqlcmd -S tcp:$SERVER -d $DB -U $USER -P $PASS -C
+              # 5. Extract PASSWORD (Try Pwd or Password)
+              PASS=$(echo "$AZURE_SQL_CONN" | grep -oP -i 'Pwd=\K[^;]+' || echo "")
+              if [ -z "$PASS" ]; then
+                  PASS=$(echo "$AZURE_SQL_CONN" | grep -oP -i 'Password=\K[^;]+' || echo "")
+              fi
+
+              echo "--- 📊 EXTRACTION RESULTS ---"
+              echo "SERVER: '$SERVER'"
+              echo "DB:     '$DB'"
+              echo "USER:   '$USER'"
+              # Do not echo PASS
+              
+              # Fail explicitly if parts are missing
+              if [ -z "$SERVER" ] || [ -z "$DB" ] || [ -z "$USER" ] || [ -z "$PASS" ]; then
+                  echo "❌ FAILURE: Could not extract one or more connection parts."
+                  echo "   Please check that your AZURE_SQL_CONN string uses format: 'Server=tcp:xyz;Database=xyz;Uid=xyz;Pwd=xyz;'"
+                  exit 1
+              fi
+
+              # Re-enable strict error checking
+              set -e
+              
+              echo "--- 🚀 CONNECTING ---"
+              # Use -Q "EXIT" to just test connection and quit immediately
+              sqlcmd -S "tcp:$SERVER" -d "$DB" -U "$USER" -P "$PASS" -C -t 30 -Q "SELECT @@VERSION;"
             env:
               AZURE_SQL_CONN: $(AZURE_SQL_CONN)
             displayName: "Pre-check: Test SQL Connectivity"

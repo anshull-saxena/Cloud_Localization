@@ -99,6 +99,18 @@ jobs:
           pwsh: true
         continueOnError: true
         
+      - task: PowerShell@2
+        displayName: 'Commit and Push Translated Files'
+        inputs:
+          targetType: 'inline'
+          script: |
+            git config user.email "pipeline@azure.com"
+            git config user.name "Azure Pipeline"
+            git add target-folder/
+            git commit -m "chore: add localized .resx files [skip ci]" || echo "No changes to commit"
+            git push origin HEAD:main
+          pwsh: true
+        
       - task: PublishBuildArtifacts@1
         displayName: 'Publish Logs'
         condition: always()
