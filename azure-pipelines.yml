@@ -70,6 +70,14 @@ jobs:
                 Write-Host "Using API key from config.json"
               }
               
+              if ($env:APPINSIGHTS_CONNECTION_STRING -and $env:APPINSIGHTS_CONNECTION_STRING.Length -gt 10) {
+                Write-Host "✓ Injecting Application Insights connection string (length: $($env:APPINSIGHTS_CONNECTION_STRING.Length))"
+                $config.app_insights_connection_string = $env:APPINSIGHTS_CONNECTION_STRING
+                $modified = $true
+              } else {
+                Write-Host "Using Application Insights connection string from config.json"
+              }
+              
               if ($modified) {
                 $config | ConvertTo-Json -Depth 10 | Set-Content $configPath
                 Write-Host "✓✓✓ Config updated with injected secrets ✓✓✓"
@@ -84,6 +92,7 @@ jobs:
           AZURE_STORAGE_CONN: $(AZURE_STORAGE_CONN)
           AZURE_SQL_CONN: $(AZURE_SQL_CONN)
           AZURE_COG_API_KEY: $(AZURE_COG_API_KEY)
+          APPINSIGHTS_CONNECTION_STRING: $(APPINSIGHTS_CONNECTION_STRING)
 
       - task: PowerShell@2
         displayName: 'Run Function1 - Extract & Upload'

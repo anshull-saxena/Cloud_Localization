@@ -225,7 +225,9 @@ def main(config_path):
     translated_container = config["translated_container"]
     sql_conn_str = config["sql_conn_str"]
     hf_token = config["hf_api_token"]
-    app_insights_conn = config.get("app_insights_connection_string")
+    
+    # Read from environment variable first (for DevOps), then config
+    app_insights_conn = os.getenv("APPINSIGHTS_CONNECTION_STRING") or config.get("app_insights_connection_string")
 
     # Configure App Insights logger
     ai_logger = None

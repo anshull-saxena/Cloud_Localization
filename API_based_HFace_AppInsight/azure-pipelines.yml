@@ -19,12 +19,14 @@ stages:
               sudo apt-get update && sudo apt-get install -y jq
               jq '.blob_connection_string = env.AZURE_STORAGE_CONN |
                   .sql_conn_str = env.AZURE_SQL_CONN |
-                  .hf_api_token = env.HUGGINGFACE_TOKEN' config.json > config.tmp.json
+                  .hf_api_token = env.HUGGINGFACE_TOKEN |
+                  .app_insights_connection_string = env.APPINSIGHTS_CONNECTION_STRING' config.json > config.tmp.json
               mv config.tmp.json config.json
             env:
               AZURE_STORAGE_CONN: $(AZURE_STORAGE_CONN)
               AZURE_SQL_CONN: $(AZURE_SQL_CONN)
               HUGGINGFACE_TOKEN: $(HUGGINGFACE_TOKEN)
+              APPINSIGHTS_CONNECTION_STRING: $(APPINSIGHTS_CONNECTION_STRING)
             displayName: "Inject secrets into config.json"
 
           - script: |
@@ -162,12 +164,14 @@ stages:
               sudo apt-get update && sudo apt-get install -y jq
               jq '.blob_connection_string = env.AZURE_STORAGE_CONN |
                   .sql_conn_str = env.AZURE_SQL_CONN |
-                  .hf_api_token = env.HUGGINGFACE_TOKEN' config.json > config.tmp.json
+                  .hf_api_token = env.HUGGINGFACE_TOKEN |
+                  .app_insights_connection_string = env.APPINSIGHTS_CONNECTION_STRING' config.json > config.tmp.json
               mv config.tmp.json config.json
             env:
               AZURE_STORAGE_CONN: $(AZURE_STORAGE_CONN)
               AZURE_SQL_CONN: $(AZURE_SQL_CONN)
               HUGGINGFACE_TOKEN: $(HUGGINGFACE_TOKEN)
+              APPINSIGHTS_CONNECTION_STRING: $(APPINSIGHTS_CONNECTION_STRING)
             displayName: "Inject secrets into config.json"
 
           - script: |
