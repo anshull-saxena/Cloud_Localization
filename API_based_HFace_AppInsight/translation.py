@@ -30,13 +30,21 @@ def connect_sql(sql_conn_str):
     return pyodbc.connect(sql_conn_str)
 
 def query_translation(cursor, source_text, target_lang):
+    """Query translation with timing"""
+    start = time.perf_counter()
     cursor.execute("SELECT TranslatedText FROM Translations WHERE SourceText=? AND TargetLang=?", (source_text, target_lang))
     row = cursor.fetchone()
-    return row[0] if row else None
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    result = row[0] if row else None
+    return result, elapsed_ms
 
 def insert_translation(cursor, source_text, target_lang, translated_text):
+    """Insert translation with timing"""
+    start = time.perf_counter()
     cursor.execute("INSERT INTO Translations (SourceText, TargetLang, TranslatedText) VALUES (?, ?, ?)",
                    (source_text, target_lang, translated_text))
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    return elapsed_ms
 
 def translate_with_hf(texts, target_lang, hf_token, model_name="facebook/mbart-large-50-many-to-many-mmt"):
     """
@@ -120,6 +128,10 @@ class RunMetrics:
         self.total_tm_hits = 0
         self.total_nmt_calls = 0
         self.nmt_latencies: List[float] = []
+        self.total_hf_api_time_sec = 0.0
+        self.total_sql_query_time_sec = 0.0
+        self.total_sql_write_time_sec = 0.0
+        self.total_commit_time_sec = 0.0
 
     def add_segment(self, tm_hit=False, nmt_latency=None):
         self.total_segments += 1
@@ -133,12 +145,16 @@ class RunMetrics:
         elapsed = time.perf_counter() - self.start_ts
         avg_nmt = statistics.mean(self.nmt_latencies) if self.nmt_latencies else 0.0
         throughput = (self.total_segments / elapsed) * 3600 if elapsed > 0 else 0.0
+        total_sql_time = self.total_sql_query_time_sec + self.total_sql_write_time_sec
         return {
             "total_files": 1,
             "total_segments": self.total_segments,
             "total_tm_hits": self.total_tm_hits,
             "total_nmt_calls": self.total_nmt_calls,
             "total_time_sec": round(elapsed, 2),
+            "hf_api_wait_sec": round(self.total_hf_api_time_sec, 2),
+            "sql_query_sec": round(total_sql_time, 2),
+            "sql_commit_sec": round(self.total_commit_time_sec, 2),
             "avg_nmt_latency_sec": round(avg_nmt, 4),
             "overall_throughput_seg_per_hr": int(throughput)
         }
@@ -170,9 +186,11 @@ def process_xlf_file(xlf_path, target_lang, conn, hf_token, metrics):
     # 1. Check SQL cache for all
     missing_indices = []
     to_translate_texts = []
+    total_sql_query_time = 0.0
     
     for i, (tu, source_text, target_elem) in enumerate(trans_units):
-        cached = query_translation(cursor, source_text, target_lang)
+        cached, sql_time = query_translation(cursor, source_text, target_lang)
+        total_sql_query_time += sql_time
         if cached:
             target_elem.text = cached
             skipped_count += 1
@@ -183,6 +201,9 @@ def process_xlf_file(xlf_path, target_lang, conn, hf_token, metrics):
 
     # 2. Batch Translation for missing
     BATCH_SIZE = 50
+    total_hf_api_time = 0.0
+    total_sql_write_time = 0.0
+    
     for i in range(0, len(to_translate_texts), BATCH_SIZE):
         batch_texts = to_translate_texts[i : i + BATCH_SIZE]
         batch_indices = missing_indices[i : i + BATCH_SIZE]
@@ -193,6 +214,7 @@ def process_xlf_file(xlf_path, target_lang, conn, hf_token, metrics):
         translations = translate_with_hf(batch_texts, target_lang, hf_token)
         
         latency = time.perf_counter() - t0
+        total_hf_api_time += latency
         # Amortize latency per item for metrics (approx)
         per_item_latency = latency / len(batch_texts) if batch_texts else 0
 
@@ -202,14 +224,24 @@ def process_xlf_file(xlf_path, target_lang, conn, hf_token, metrics):
                 tu, source_text, target_elem = trans_units[original_idx]
                 
                 target_elem.text = translated_text
-                insert_translation(cursor, source_text, target_lang, translated_text)
+                write_time = insert_translation(cursor, source_text, target_lang, translated_text)
+                total_sql_write_time += write_time
                 
                 metrics.add_segment(nmt_latency=per_item_latency)
                 translated_count += 1
             else:
                 skipped_count += 1
 
+    commit_start = time.perf_counter()
     conn.commit()
+    total_commit_time = (time.perf_counter() - commit_start) * 1000
+    
+    # Accumulate timing metrics
+    metrics.total_hf_api_time_sec += total_hf_api_time
+    metrics.total_sql_query_time_sec += total_sql_query_time / 1000  # Convert ms to sec
+    metrics.total_sql_write_time_sec += total_sql_write_time / 1000  # Convert ms to sec
+    metrics.total_commit_time_sec += total_commit_time / 1000  # Convert ms to sec
+    
     tree.write(xlf_path, encoding="utf-8", xml_declaration=True)
     logger.info(f"✅ Completed {xlf_path}: {translated_count} new, {skipped_count} cached/skipped")
 
