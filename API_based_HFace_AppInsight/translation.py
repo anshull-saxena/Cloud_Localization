@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import logging
 import sys
 import time
+import asyncio
 import statistics
 import uuid
 import psutil
@@ -195,8 +196,11 @@ def translate_with_hf(texts, target_lang, hf_token, model_name="facebook/mbart-l
         return [None] * len(texts), latency_ms
 
 
+async def translate_with_hf_async(texts, target_lang, hf_token, model_name="facebook/mbart-large-50-many-to-many-mmt"):
+    return await asyncio.to_thread(translate_with_hf, texts, target_lang, hf_token, model_name)
 
-def process_xlf_file(xlf_path, target_lang, conn, hf_token, file_stats):
+
+async def process_xlf_file(xlf_path, target_lang, conn, hf_token, file_stats):
     """Process XLF file and return timing stats"""
     logger.info(f"🔄 Processing {xlf_path} for {target_lang}")
     
@@ -250,7 +254,7 @@ def process_xlf_file(xlf_path, target_lang, conn, hf_token, file_stats):
         profiler.counters["total_batches"] += 1
         
         logger.info(f"🚀 Batch translating {len(batch_texts)} items...")
-        translations, batch_latency_ms = translate_with_hf(batch_texts, target_lang, hf_token)
+        translations, batch_latency_ms = await translate_with_hf_async(batch_texts, target_lang, hf_token)
         
         total_hf_api_time_ms += batch_latency_ms
         per_item_latency = batch_latency_ms / len(batch_texts) if batch_texts else 0
@@ -291,7 +295,7 @@ def process_xlf_file(xlf_path, target_lang, conn, hf_token, file_stats):
     
     return xml_parse_ms, xml_write_ms, total_source_chars, total_translated_chars
 
-def main(config_path):
+async def main(config_path):
     config = load_config(config_path)
     
     # Record cold start time
@@ -356,7 +360,7 @@ def main(config_path):
         # Initialize file_stats
         file_stats = {"total_api_time_ms": 0, "total_sql_time_ms": 0, "total_commit_time_ms": 0}
         
-        xml_parse_ms, xml_write_ms, total_source_chars, total_translated_chars = process_xlf_file(
+        xml_parse_ms, xml_write_ms, total_source_chars, total_translated_chars = await process_xlf_file(
             local_path, target_lang, conn, hf_token, file_stats
         )
 
@@ -464,4 +468,4 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python translation.py <config.json>")
         sys.exit(1)
-    main(sys.argv[1])
+    asyncio.run(main(sys.argv[1]))
