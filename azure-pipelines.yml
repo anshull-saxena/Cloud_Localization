@@ -72,7 +72,11 @@ jobs:
               
               if ($env:APPINSIGHTS_CONNECTION_STRING -and $env:APPINSIGHTS_CONNECTION_STRING.Length -gt 10) {
                 Write-Host "✓ Injecting Application Insights connection string (length: $($env:APPINSIGHTS_CONNECTION_STRING.Length))"
-                $config.app_insights_connection_string = $env:APPINSIGHTS_CONNECTION_STRING
+                if ($config.PSObject.Properties.Name -contains "app_insights_connection_string") {
+                  $config.app_insights_connection_string = $env:APPINSIGHTS_CONNECTION_STRING
+                } else {
+                  $config | Add-Member -NotePropertyName "app_insights_connection_string" -NotePropertyValue $env:APPINSIGHTS_CONNECTION_STRING
+                }
                 $modified = $true
               } else {
                 Write-Host "Using Application Insights connection string from config.json"
