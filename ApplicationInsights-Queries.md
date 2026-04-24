@@ -9,25 +9,52 @@ This document contains Kusto Query Language (KQL) queries for analyzing your loc
 
 ### View All Translation Metrics
 ```kusto
+// Sent by translation.py (API_based_HFace_AppInsight pipeline) via opencensus
+// Fields come from metrics_payload custom_dimensions
 traces
 | where timestamp > ago(7d)
-| where message contains "TranslationMetrics"
-| extend File = tostring(customDimensions.File)
-| extend Lang = tostring(customDimensions.Lang)
-| extend Segments = toint(customDimensions.Segments)
-| extend TMHits = toint(customDimensions.TMHits)
-| extend NMTCalls = toint(customDimensions.NMTCalls)
-| extend AvgLatency = toreal(customDimensions.AvgLatency)
-| extend TotalTime = toreal(customDimensions.TotalTime)
+| where message == "TranslationMetrics"
+| extend File        = tostring(customDimensions.file_name)
+| extend Lang        = tostring(customDimensions.target_lang)
+| extend Segments    = toint(customDimensions.total_segments)
+| extend TMHits      = toint(customDimensions.transational_memory_hits)
+| extend NMTCalls    = toint(customDimensions.nmt_calls)
+| extend AvgLatency  = toreal(customDimensions.time_per_token)
+| extend TotalTime   = toreal(customDimensions.total_time)
 | project timestamp, File, Lang, Segments, TMHits, NMTCalls, AvgLatency, TotalTime
 | order by timestamp desc
 ```
 
 ### View All Application Logs (Last 24 Hours)
 ```kusto
+// API pipeline (translation.py): 'TranslationMetrics' traces
 traces
 | where timestamp > ago(24h)
+| where message == "TranslationMetrics"
 | project timestamp, message, severityLevel, customDimensions
+| order by timestamp desc
+```
+
+```kusto
+// PowerShell pipeline (function1/function2): 'LocalizationSLAMetrics' traces
+traces
+| where timestamp > ago(24h)
+| where message == "LocalizationSLAMetrics"
+| extend RunId           = tostring(customDimensions.RunId)
+| extend DurationSeconds = toreal(customDimensions.DurationSeconds)
+| extend SLAViolation    = tostring(customDimensions.SLAViolation)
+| project timestamp, RunId, DurationSeconds, SLAViolation
+| order by timestamp desc
+```
+
+```kusto
+// PowerShell pipeline: SLA events in customEvents table
+customEvents
+| where timestamp > ago(24h)
+| where name == "LocalizationSLAMetrics"
+| extend RunId = tostring(customDimensions.RunId)
+| extend SLAViolation = tostring(customDimensions.SLAViolation)
+| project timestamp, RunId, SLAViolation, customMeasurements
 | order by timestamp desc
 ```
 
@@ -46,13 +73,25 @@ traces
 
 ### Average Translation Time by Language
 ```kusto
+// API pipeline (translation.py) — note field is 'target_lang' and 'total_time'
 traces
 | where timestamp > ago(7d)
-| where message contains "TranslationMetrics"
-| extend Lang = tostring(customDimensions.Lang)
-| extend TotalTime = toreal(customDimensions.TotalTime)
+| where message == "TranslationMetrics"
+| extend Lang      = tostring(customDimensions.target_lang)
+| extend TotalTime = toreal(customDimensions.total_time)
 | summarize AvgTime = avg(TotalTime), TotalRuns = count() by Lang
 | order by AvgTime desc
+```
+
+```kusto
+// PowerShell pipeline (function2) — field is 'DurationSeconds'
+traces
+| where timestamp > ago(7d)
+| where message == "LocalizationSLAMetrics"
+| extend RunId           = tostring(customDimensions.RunId)
+| extend DurationSeconds = toreal(customDimensions.DurationSeconds)
+| extend TotalSentences  = toint(customDimensions.TotalSentences)
+| summarize AvgDuration = avg(DurationSeconds), TotalRuns = count()
 ```
 
 ### Translation Volume by File
@@ -68,13 +107,14 @@ traces
 
 ### Cache Hit Rate by Language
 ```kusto
+// API pipeline — cache hit rate (field: transational_memory_hits, total_segments)
 traces
 | where timestamp > ago(7d)
-| where message contains "TranslationMetrics"
-| extend Lang = tostring(customDimensions.Lang)
-| extend TMHits = toint(customDimensions.TMHits)
-| extend TotalSegments = toint(customDimensions.Segments)
-| summarize TotalHits = sum(TMHits), TotalSegs = sum(TotalSegments) by Lang
+| where message == "TranslationMetrics"
+| extend Lang       = tostring(customDimensions.target_lang)
+| extend TMHits     = toint(customDimensions.transational_memory_hits)
+| extend TotalSegs  = toint(customDimensions.total_segments)
+| summarize TotalHits = sum(TMHits), TotalSegs = sum(TotalSegs) by Lang
 | extend CacheHitRate = round(100.0 * TotalHits / TotalSegs, 2)
 | project Lang, CacheHitRate, TotalHits, TotalSegs
 | order by CacheHitRate desc
@@ -439,6 +479,40 @@ Make sure your `config.json` includes:
   "app_insights_connection_string": "InstrumentationKey=YOUR-KEY;IngestionEndpoint=https://..."
 }
 ```
+
+## Field Name Reference (translation.py metrics_payload)
+
+| KQL customDimensions field       | Meaning                         |
+|----------------------------------|---------------------------------|
+| `target_lang`                    | Language code (e.g. `fr-FR`)    |
+| `file_name`                      | Blob/file name processed        |
+| `total_segments`                 | Total translation units         |
+| `transational_memory_hits`       | SQL cache hits (note typo in code) |
+| `nmt_calls`                      | HuggingFace API calls made      |
+| `total_time`                     | Total processing time (ms)      |
+| `time_per_token`                 | ms per token (avg NMT latency)  |
+| `cache_rate`                     | Cache hit % (0-100)             |
+| `hf_api_wait_ms`                 | Time waiting for HF API         |
+| `throughput_seg_per_hr`          | Segments/hour                   |
+| `cold_start_init_ms`             | Cold start overhead             |
+| `cpu_usage_pct` / `memory_mb`    | System resource usage           |
+
+## Field Name Reference (PowerShell SLA metrics — LocalizationSLAMetrics)
+
+| KQL customDimensions field | Meaning                                |
+|----------------------------|----------------------------------------|
+| `RunId`                    | Unique run identifier                  |
+| `Status`                   | "Completed" or "Completed (SLA Violation)" |
+| `DurationSeconds`          | Total run time in seconds              |
+| `TotalSentences`           | Sentences translated                   |
+| `TotalLanguages`           | Languages processed                    |
+| `TotalTokens`              | Total tokens processed                 |
+| `SLAViolation`             | "True" or "False"                      |
+| `SLADeadlineSeconds`       | SLA deadline in seconds                |
+| `Throughput`               | Sentences per second                   |
+| `P50/P95/P99LatencyMs`     | Latency percentiles                    |
+| `NMTCount` / `LLMCount`    | Model routing stats                    |
+| `PipelineBuildId`          | Azure DevOps Build ID                  |
 
 ## Notes:
 - All queries assume the custom dimensions structure from [translation.py](API_based_HFace_AppInsight/translation.py#L282-L290)

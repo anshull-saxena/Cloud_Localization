@@ -86,6 +86,36 @@ Outputs are written to:
 - Azure Blob Storage containers (raw-files, trans-files)
 - Localized .resx files under TargetResxPath
 
+## Azure CLI setup for `base_version`
+
+The `base_version` project now includes Azure CLI bootstrap scripts that keep CLI state inside the repo instead of relying on `~/.azure`.
+
+macOS/Linux:
+
+```bash
+cd "base_version "
+chmod +x scripts/setup-azure-cli.sh
+./scripts/setup-azure-cli.sh
+AZURE_CONFIG_DIR="$(pwd)/.azure" az login --use-device-code
+./scripts/setup-azure-cli.sh --resource-group YOUR_RG --write-config
+```
+
+PowerShell:
+
+```powershell
+Set-Location "base_version "
+./scripts/setup-azure-cli.ps1
+$env:AZURE_CONFIG_DIR = "$PWD/.azure"
+az login --use-device-code
+./scripts/setup-azure-cli.ps1 -ResourceGroup YOUR_RG -WriteConfig
+```
+
+Notes:
+- `scripts/setup-azure-cli.sh` and `scripts/setup-azure-cli.ps1` auto-detect `StorageAccountName` from `config.json`.
+- Pass `--storage-account` or `-StorageAccount` only if you want to override the value from `config.json`.
+- `--write-config` or `-WriteConfig` writes the resolved blob storage connection string back to `config.json`.
+- The local Azure CLI state is stored in `.azure/`, which is ignored by git.
+
 ## 6) Run in Azure DevOps Pipelines
 
 Each variant includes an Azure DevOps pipeline file:

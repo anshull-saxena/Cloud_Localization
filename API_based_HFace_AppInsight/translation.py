@@ -313,15 +313,22 @@ async def main(config_path):
     # Configure App Insights logger
     ai_logger = None
     az_handler = None
-    if AzureLogHandler and app_insights_conn and "InstrumentationKey" in app_insights_conn:
+    if not AzureLogHandler:
+        logger.warning("⚠️ opencensus-ext-azure not installed — App Insights telemetry disabled")
+    elif not app_insights_conn:
+        logger.warning("⚠️ APPINSIGHTS_CONNECTION_STRING not set — App Insights telemetry disabled")
+    elif "InstrumentationKey" not in app_insights_conn:
+        logger.warning(f"⚠️ App Insights connection string present but missing 'InstrumentationKey'. Starts with: {app_insights_conn[:30]}")
+    else:
         try:
             ai_logger = logging.getLogger("app_insights_logger")
+            ai_logger.propagate = False  # prevent double-logging to console
             az_handler = AzureLogHandler(connection_string=app_insights_conn)
             if not hasattr(az_handler, 'lock') or az_handler.lock is None:
                 az_handler.lock = threading.RLock()
             ai_logger.addHandler(az_handler)
             ai_logger.setLevel(logging.INFO)
-            logger.info("✅ Azure Application Insights configured")
+            logger.info("✅ Azure Application Insights configured successfully")
         except Exception as e:
             logger.warning(f"⚠️ Failed to configure App Insights: {e}")
 
@@ -448,18 +455,35 @@ async def main(config_path):
             "api_throttled_429": profiler.counters.get("api_throttled", 0)
         }
         
-        # Log in RESEARCH_DATA format (matching Gen2/Gen3)
+        # Log in RESEARCH_DATA format to console/stdout (for DevOps logs)
         logger.info(f"📊 RESEARCH_DATA: {json.dumps(metrics_payload)}")
         
-        # Send to App Insights
+        # Send STRUCTURED telemetry to App Insights via custom_dimensions.
+        # Message is 'TranslationMetrics' so KQL queries work:
+        #   traces | where message == 'TranslationMetrics' | extend Lang = tostring(customDimensions.target_lang)
         if ai_logger:
-            ai_logger.info(f"📊 RESEARCH_DATA: {json.dumps(metrics_payload)}")
-            if az_handler:
-                try:
-                    az_handler.flush()
-                except Exception:
-                    pass
-            logger.info(f"📡 Sent metrics to App Insights for {blob_name}")
+            try:
+                t_start = time.perf_counter()
+                ai_logger.info(
+                    "TranslationMetrics",
+                    extra={"custom_dimensions": metrics_payload}
+                )
+                telemetry_overhead = (time.perf_counter() - t_start) * 1000
+                profiler.counters["telemetry_overhead_ms"] += telemetry_overhead
+                logger.info(f"📡 Queued metrics to App Insights for {blob_name} (overhead: {telemetry_overhead:.1f}ms)")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to log to App Insights for {blob_name}: {e}")
+
+    # ✅ FINAL FLUSH — opencensus batches telemetry in a background thread.
+    # Without this, any buffered items are silently dropped when the process exits.
+    if ai_logger and az_handler:
+        try:
+            logger.info("📡 Flushing App Insights telemetry buffer...")
+            az_handler.flush()
+            time.sleep(5)  # give background thread time to ship all buffered items
+            logger.info("✅ App Insights telemetry flushed")
+        except Exception as e:
+            logger.warning(f"⚠️ App Insights flush error (telemetry may be partially lost): {e}")
 
     conn.close()
     logger.info("🎉 Phase2 translation completed successfully")

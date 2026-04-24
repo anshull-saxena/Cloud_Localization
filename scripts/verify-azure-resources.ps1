@@ -54,6 +54,11 @@ if ($config.ConnectionString -match "AccountName=([^;]+)") {
 
 Write-Host ""
 Write-Host "=== Next Steps ===" -ForegroundColor Cyan
+Write-Host "Initialize Azure CLI for this repo with:" -ForegroundColor Gray
+Write-Host "  ./scripts/setup-azure-cli.sh --resource-group YOUR_RG --storage-account $($config.StorageAccountName)" -ForegroundColor White
+Write-Host "or in PowerShell:" -ForegroundColor Gray
+Write-Host "  ./scripts/setup-azure-cli.ps1 -ResourceGroup YOUR_RG -StorageAccount $($config.StorageAccountName)" -ForegroundColor White
+Write-Host ""
 Write-Host "If the storage account doesn't exist, create it with:" -ForegroundColor Gray
 Write-Host "  az storage account create --name YOUR_UNIQUE_NAME --resource-group YOUR_RG --location eastus --sku Standard_LRS" -ForegroundColor White
 Write-Host ""

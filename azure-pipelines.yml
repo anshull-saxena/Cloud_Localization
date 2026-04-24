@@ -111,7 +111,210 @@ jobs:
           filePath: 'scripts/function2.ps1'
           pwsh: true
         continueOnError: true
-        
+
+      # ✅ NEW: Send SLA metrics collected by Function1/Function2 to Azure Application Insights
+      # function1.ps1 and function2.ps1 write SLA reports to logs/*.json but never send to App Insights.
+      # This step reads those reports and POSTs them via the App Insights REST Track API so data
+      # appears in Azure Portal under Application Insights > Logs (traces & customEvents tables).
+      - task: PowerShell@2
+        displayName: 'Send SLA Metrics to Application Insights'
+        condition: always()
+        inputs:
+          targetType: 'inline'
+          script: |
+            $configPath = "config.json"
+            if (!(Test-Path $configPath)) {
+              Write-Warning "config.json not found - skipping App Insights telemetry"
+              exit 0
+            }
+
+            $config = Get-Content $configPath | ConvertFrom-Json
+            $appInsightsConnStr = $config.app_insights_connection_string
+
+            if ([string]::IsNullOrWhiteSpace($appInsightsConnStr) -or $appInsightsConnStr.Length -lt 10) {
+              Write-Warning "app_insights_connection_string not configured - skipping telemetry (set APPINSIGHTS_CONNECTION_STRING pipeline variable)"
+              exit 0
+            }
+
+            # Parse InstrumentationKey and IngestionEndpoint from connection string
+            $iKey = ($appInsightsConnStr -split ";") |
+                    Where-Object { $_ -like "InstrumentationKey=*" } |
+                    ForEach-Object { $_ -replace "InstrumentationKey=", "" }
+            $ingestionRaw = ($appInsightsConnStr -split ";") |
+                            Where-Object { $_ -like "IngestionEndpoint=*" } |
+                            ForEach-Object { $_ -replace "IngestionEndpoint=", "" }
+            $ingestionEndpoint = if ($ingestionRaw) {
+              $ingestionRaw.TrimEnd("/") + "/v2/track"
+            } else {
+              "https://dc.services.visualstudio.com/v2/track"
+            }
+
+            if ([string]::IsNullOrWhiteSpace($iKey)) {
+              Write-Warning "Could not parse InstrumentationKey from connection string - check format"
+              exit 0
+            }
+
+            Write-Host "✅ App Insights configured (iKey starts: $($iKey.Substring(0, [Math]::Min(8,$iKey.Length)))...)"
+            Write-Host "📡 Ingestion endpoint: $ingestionEndpoint"
+
+            # Helper: POST one telemetry item to App Insights REST API
+            function Send-AppInsightsTelemetry {
+              param([hashtable]$Item)
+              $payload = @($Item) | ConvertTo-Json -Depth 10
+              try {
+                Invoke-RestMethod -Method POST -Uri $ingestionEndpoint `
+                  -ContentType "application/json" -Body $payload -ErrorAction Stop | Out-Null
+                return $true
+              } catch {
+                Write-Warning "App Insights POST failed: $_"
+                return $false
+              }
+            }
+
+            $sentCount = 0
+
+            # All SLA log files that function1.ps1 / function2.ps1 may have written
+            $slaLogPaths = @(
+              "logs/sla-metrics-function2.json",
+              "logs/sla-metrics-function1.json",
+              "logs/sla-metrics.json"
+            )
+
+            foreach ($logPath in $slaLogPaths) {
+              if (!(Test-Path $logPath)) {
+                Write-Host "No log at $logPath - skipping"
+                continue
+              }
+
+              Write-Host "📊 Processing $logPath ..."
+              try {
+                $slaData = Get-Content $logPath -Raw | ConvertFrom-Json
+                $run = $slaData.Run
+                if ($null -eq $run) {
+                  Write-Warning "No 'Run' object found in $logPath"
+                  continue
+                }
+
+                # Build flat string properties for App Insights custom dimensions
+                $props = @{
+                  RunId              = [string]$run.RunId
+                  Status             = [string]$run.Status
+                  DurationSeconds    = [string]$run.DurationSeconds
+                  TotalSentences     = [string]$run.TotalSentences
+                  TotalLanguages     = [string]$run.TotalLanguages
+                  TotalTokens        = [string]$run.TotalTokens
+                  SLAViolation       = [string]$run.SLAViolation
+                  SLADeadlineSeconds = [string]$run.SLADeadlineSeconds
+                  Throughput         = [string]$run.Throughput
+                  P50LatencyMs       = if ($run.LatencyPercentiles) { [string]$run.LatencyPercentiles.P50 } else { "N/A" }
+                  P95LatencyMs       = if ($run.LatencyPercentiles) { [string]$run.LatencyPercentiles.P95 } else { "N/A" }
+                  P99LatencyMs       = if ($run.LatencyPercentiles) { [string]$run.LatencyPercentiles.P99 } else { "N/A" }
+                  NMTCount           = if ($run.ModelUsageStats)    { [string]$run.ModelUsageStats.NMTCount } else { "0" }
+                  LLMCount           = if ($run.ModelUsageStats)    { [string]$run.ModelUsageStats.LLMCount } else { "0" }
+                  PipelineBuildId    = [string]$env:BUILD_BUILDID
+                  PipelineName       = [string]$env:BUILD_DEFINITIONNAME
+                  SourceBranch       = [string]$env:BUILD_SOURCEBRANCH
+                  LogSource          = $logPath
+                }
+
+                # Build numeric measurements
+                $measurements = @{
+                  DurationSeconds = [double]$run.DurationSeconds
+                  TotalSentences  = [double]$run.TotalSentences
+                  TotalTokens     = [double]$run.TotalTokens
+                  Throughput      = [double]$run.Throughput
+                }
+                if ($run.LatencyPercentiles) {
+                  $measurements["P50LatencyMs"] = [double]$run.LatencyPercentiles.P50
+                  $measurements["P95LatencyMs"] = [double]$run.LatencyPercentiles.P95
+                  $measurements["P99LatencyMs"] = [double]$run.LatencyPercentiles.P99
+                }
+
+                # iKey prefix used in envelope name (32 hex chars, dashes removed)
+                $iKeyHex = $iKey.Replace("-","").Substring(0, [Math]::Min(32, $iKey.Replace("-","").Length))
+
+                # 1. Send as CustomEvent (appears in customEvents table in App Insights)
+                $eventItem = @{
+                  name = "Microsoft.ApplicationInsights.$iKeyHex.Event"
+                  time = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")
+                  iKey = $iKey
+                  data = @{
+                    baseType = "EventData"
+                    baseData = @{
+                      ver          = 2
+                      name         = "LocalizationSLAMetrics"
+                      properties   = $props
+                      measurements = $measurements
+                    }
+                  }
+                }
+                if (Send-AppInsightsTelemetry -Item $eventItem) {
+                  $sentCount++
+                  Write-Host "✅ Sent CustomEvent: LocalizationSLAMetrics (RunId: $($run.RunId))"
+                }
+
+                # 2. Send as Trace (appears in traces table, so KQL queries like
+                #    'traces | where message == "LocalizationSLAMetrics"' work)
+                $traceItem = @{
+                  name = "Microsoft.ApplicationInsights.$iKeyHex.Message"
+                  time = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")
+                  iKey = $iKey
+                  data = @{
+                    baseType = "MessageData"
+                    baseData = @{
+                      ver           = 2
+                      message       = "LocalizationSLAMetrics"
+                      severityLevel = 1
+                      properties    = $props
+                    }
+                  }
+                }
+                if (Send-AppInsightsTelemetry -Item $traceItem) { $sentCount++ }
+
+                # 3. If SLA violated, send Exception so Azure Alerts can trigger
+                if ($run.SLAViolation -eq $true) {
+                  $exItem = @{
+                    name = "Microsoft.ApplicationInsights.$iKeyHex.Exception"
+                    time = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")
+                    iKey = $iKey
+                    data = @{
+                      baseType = "ExceptionData"
+                      baseData = @{
+                        ver = 2
+                        exceptions = @(@{
+                          typeName     = "SLAViolationException"
+                          message      = "SLA Violation: run $($run.RunId) took $($run.DurationSeconds)s (deadline $($run.SLADeadlineSeconds)s)"
+                          hasFullStack = $false
+                        })
+                        properties = $props
+                      }
+                    }
+                  }
+                  if (Send-AppInsightsTelemetry -Item $exItem) {
+                    $sentCount++
+                    Write-Host "⚠️ Sent SLA Violation exception to App Insights"
+                  }
+                }
+              } catch {
+                Write-Warning "Error processing $logPath : $_"
+              }
+            }
+
+            Write-Host ""
+            Write-Host "📡 Total telemetry items sent to App Insights: $sentCount"
+            if ($sentCount -eq 0) {
+              Write-Warning "No SLA log files found. Verify Function1/Function2 ran and EnableSLALogging=true in config.json"
+            } else {
+              Write-Host "✅ Telemetry sent! Check Azure Portal > Application Insights > Logs in 2-5 minutes."
+              Write-Host "   KQL: customEvents | where name == 'LocalizationSLAMetrics' | order by timestamp desc"
+              Write-Host "   KQL: traces | where message == 'LocalizationSLAMetrics' | order by timestamp desc"
+            }
+          pwsh: true
+        env:
+          BUILD_BUILDID: $(Build.BuildId)
+          BUILD_DEFINITIONNAME: $(Build.DefinitionName)
+          BUILD_SOURCEBRANCH: $(Build.SourceBranch)
+
       - task: PowerShell@2
         displayName: 'Commit and Push Translated Files'
         inputs:

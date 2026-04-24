@@ -140,7 +140,7 @@ stages:
           # Run Phase2 translation with detailed logs
           - script: |
               set -e
-              python3 -m pip install azure-storage-blob requests pyodbc opencensus-ext-azure
+              python3 -m pip install azure-storage-blob requests pyodbc opencensus-ext-azure psutil
               echo "🚀 Starting Phase2 translation..."
               python3 translation.py config.json 2>&1 | tee phase2.log
               echo "✅ Phase2 completed. Full log saved to phase2.log"
