@@ -56,7 +56,11 @@ jobs:
               
               if ($env:AZURE_SQL_CONN -and $env:AZURE_SQL_CONN.Length -gt 10) {
                 Write-Host "✓ Injecting SQL connection string (length: $($env:AZURE_SQL_CONN.Length))"
-                $config.SQLConnectionString = $env:AZURE_SQL_CONN
+                # PowerShell .NET SqlClient crashes if "Driver=..." is in the string.
+                # Remove it if it exists (usually added for Python ODBC).
+                $cleanSqlConn = $env:AZURE_SQL_CONN -replace "(?i)Driver=\{[^}]+\};?", ""
+                $cleanSqlConn = $cleanSqlConn -replace "(?i)Driver=[^;]+;?", ""
+                $config.SQLConnectionString = $cleanSqlConn
                 $modified = $true
               } else {
                 Write-Host "Using SQL connection string from config.json"
