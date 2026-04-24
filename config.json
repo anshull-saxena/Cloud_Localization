@@ -4,7 +4,7 @@
     "ConnectionString": "",
     "TargetLanguages": ["fr-FR", "es-ES", "hi-IN", "de-DE", "ja-JP", "ta-IN", "te-IN", "kn-IN", "bn-IN", "mr-IN"],
     "AzureCognitiveServiceAPIKey": "",
-    "AzureRegion": "centralindia",
+    "AzureRegion": "eastasia",
     "SourceRepoPath": "source-folder",
     "TargetRepoPath": "target-folder",
     "SQLConnectionString": "Server=tcp:cloudlocalization.database.windows.net,1433;Initial Catalog=cloudlocal;Persist Security Info=False;User ID=local;Password=cloudABCDEF@123;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
