@@ -1,7 +1,7 @@
 {
   "blob_connection_string": "__BLOB_CONN__",
   "sql_conn_str": "__SQL_CONN__",
-  "app_insights_connection_string": "__APP_INSIGHTS_CONN__",
+  "app_insights_connection_string": "InstrumentationKey=a85f50d2-1dae-43d4-b2f8-6de3c54c6bf1;IngestionEndpoint=https://centralindia-0.in.applicationinsights.azure.com/;LiveEndpoint=https://centralindia.livediagnostics.monitor.azure.com/;ApplicationId=9181f8bc-50a5-4012-9b2e-8acf9d9a989d",
   "SourceRepoPath": "source-folder",
   "TargetLanguages": [
     "fr-FR",
