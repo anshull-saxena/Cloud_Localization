@@ -2,22 +2,30 @@
     "StorageAccountName": "cloudlocalization",
     "TempContainerName": "xliff-temp-files",
     "ConnectionString": "",
-    "TargetLanguages": ["fr-FR", "es-ES", "hi-IN", "de-DE", "ja-JP", "ta-IN", "te-IN", "kn-IN", "bn-IN", "mr-IN"],
+    "TargetLanguages": [
+        "fr-FR",
+        "es-ES",
+        "hi-IN",
+        "de-DE",
+        "ja-JP",
+        "ta-IN",
+        "te-IN",
+        "kn-IN",
+        "bn-IN",
+        "mr-IN"
+    ],
     "AzureCognitiveServiceAPIKey": "",
     "AzureRegion": "eastasia",
     "SourceRepoPath": "source-folder",
     "TargetRepoPath": "target-folder",
-    "SQLConnectionString": "Server=tcp:cloudlocalization.database.windows.net,1433;Initial Catalog=cloudlocal;Persist Security Info=False;User ID=local;Password=cloudABCDEF@123;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
-    
+    "SQLConnectionString": "Server=tcp:basicver.database.windows.net,1433;Initial Catalog=basicdata;Persist Security Info=False;User ID=CloudSA8b091f5c;Password=CloudA1234;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
     "_comment_tokenization": "Token counting and sentence characterization settings",
     "TokenizationMethod": "CharacterBased",
     "SmallSentenceThreshold": 100,
     "TokenizerAPIEndpoint": "",
-    
     "_comment_batching": "Adaptive batch sizing configuration",
     "MaxTokenBatch": 2000,
     "EnableAdaptiveBatching": true,
-    
     "_comment_model_routing": "Hybrid NMT/LLM model routing (disabled by default until endpoints configured)",
     "EnableModelRouting": false,
     "NMTEndpoint": "",
@@ -27,7 +35,6 @@
     "LLMModelName": "gpt-4",
     "SmallSentenceModel": "NMT",
     "LargeSentenceModel": "LLM",
-    
     "_comment_infra_routing": "Optional VM vs Serverless infrastructure routing (disabled by default)",
     "EnableInfraRouting": false,
     "VMEndpoint": "",
@@ -36,7 +43,6 @@
     "ServerlessAPIKey": "",
     "ConcurrencyThreshold": 10,
     "TokenLoadThreshold": 50000,
-    
     "_comment_sla_logging": "SLA-aware performance tracking and logging",
     "EnableSLALogging": true,
     "SLADeadlineSeconds": 3600,
