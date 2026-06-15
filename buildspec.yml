@@ -1,0 +1,276 @@
+# =============================================================================
+# buildspec.yml — AWS CodeBuild configuration
+# =============================================================================
+# WHAT IS THIS FILE?
+#   This is the AWS equivalent of your azure-pipelines.yml.
+#   When AWS CodeBuild runs, it reads this file and executes the steps
+#   defined here in order — just like following a recipe.
+#
+# HOW DOES IT WORK?
+#   AWS CodeBuild spins up a fresh virtual machine, downloads your code
+#   from GitHub, and then runs each "phase" below one by one.
+#
+# THE 4 PHASES:
+#   install   → Install tools and software the pipeline needs
+#   pre_build → Prepare the environment (inject secrets, check connections)
+#   build     → Run the actual localization pipeline (Phase 1 + Phase 2)
+#   post_build→ Save logs, report success/failure
+# =============================================================================
+
+version: 0.2
+
+# ---------------------------------------------------------------------------
+# ENVIRONMENT VARIABLES
+# ---------------------------------------------------------------------------
+# These are secret values that you store safely in AWS Systems Manager
+# Parameter Store (or AWS Secrets Manager), NOT hardcoded here.
+#
+# HOW TO SET THEM UP IN AWS:
+#   1. Go to AWS Console → Systems Manager → Parameter Store
+#   2. Create a new parameter for each variable below
+#   3. Use type "SecureString" for passwords/connection strings
+#   4. AWS CodeBuild will automatically inject them here at runtime
+#
+# The format is:
+#   VARIABLE_NAME:
+#     type: PARAMETER_STORE          ← tells AWS to fetch from Parameter Store
+#     name: /localization/variable   ← the path you used when saving it
+# ---------------------------------------------------------------------------
+env:
+  parameter-store:
+    # Azure Blob Storage connection string
+    # (your pipeline still reads/writes to Azure Blob even when running on AWS)
+    AZURE_STORAGE_CONN: /localization/azure-storage-conn
+
+    # Azure SQL Database connection string (for Translation Memory)
+    AZURE_SQL_CONN: /localization/azure-sql-conn
+
+    # Azure Cognitive Services API key (for translation)
+    AZURE_COG_API_KEY: /localization/azure-cog-api-key
+
+# ---------------------------------------------------------------------------
+# PHASES
+# ---------------------------------------------------------------------------
+phases:
+
+  # -------------------------------------------------------------------------
+  # PHASE 1: INSTALL
+  # -------------------------------------------------------------------------
+  # What happens here?
+  #   We set up the machine with everything it needs to run your scripts.
+  #   This is like setting up your kitchen before you start cooking.
+  #
+  # The CodeBuild machine uses Ubuntu Linux by default.
+  # Your project uses PowerShell scripts (function1.ps1, function2.ps1),
+  # so we need to install PowerShell on Linux — yes, PowerShell runs on Linux!
+  # -------------------------------------------------------------------------
+  install:
+    runtime-versions:
+      # We tell AWS which version of Python to use
+      python: 3.11
+
+    commands:
+      # --- Install PowerShell on Linux ---
+      # Your scripts (function1.ps1, function2.ps1) are written in PowerShell.
+      # AWS CodeBuild uses Ubuntu Linux, so we need to install PowerShell first.
+      # This downloads and installs it just like installing an app on your phone.
+      - echo ">>> Installing PowerShell on Ubuntu Linux..."
+      - apt-get update -y
+      - apt-get install -y wget apt-transport-https software-properties-common
+      - wget -q https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb
+      - dpkg -i packages-microsoft-prod.deb
+      - apt-get update -y
+      - apt-get install -y powershell
+      - echo ">>> PowerShell installed successfully!"
+
+      # --- Install PowerShell Modules ---
+      # Your scripts need Az.Storage (to talk to Azure Blob Storage)
+      # and SqlServer (to talk to Azure SQL Database).
+      # This is like installing apps (modules) inside PowerShell.
+      - echo ">>> Installing PowerShell modules: Az.Storage and SqlServer..."
+      - pwsh -Command "Install-Module -Name Az.Storage -Force -Scope CurrentUser -AllowClobber -Repository PSGallery"
+      - pwsh -Command "Install-Module -Name SqlServer -Force -Scope CurrentUser -AllowClobber -Repository PSGallery"
+      - echo ">>> PowerShell modules installed!"
+
+      # --- Install Python packages ---
+      # Some parts of the pipeline use Python (e.g., the API-based approach).
+      # We install these just in case they're needed.
+      - echo ">>> Installing Python packages..."
+      - pip install --upgrade pip
+      - pip install azure-storage-blob requests pyodbc
+      - echo ">>> Python packages installed!"
+
+  # -------------------------------------------------------------------------
+  # PHASE 2: PRE_BUILD
+  # -------------------------------------------------------------------------
+  # What happens here?
+  #   Before running the pipeline, we need to:
+  #   1. Inject secrets (passwords) into config.json
+  #   2. Verify that the connections to Azure Blob and SQL actually work
+  #
+  # WHY DO WE INJECT SECRETS HERE?
+  #   Your config.json file might have placeholder values like "" for
+  #   connection strings. We replace those placeholders with the real values
+  #   that are safely stored in AWS Parameter Store.
+  #   This way, no passwords ever appear in your code or GitHub repository.
+  #
+  # This mirrors exactly what the Azure pipeline does with:
+  #   env:
+  #     AZURE_STORAGE_CONN: $(AZURE_STORAGE_CONN)
+  # -------------------------------------------------------------------------
+  pre_build:
+    commands:
+      - echo ">>> PRE-BUILD: Injecting secrets into config.json..."
+
+      # --- Inject secrets into config.json ---
+      # We use 'jq' (a Linux tool for editing JSON files) to replace the
+      # placeholder values in config.json with real secrets from AWS.
+      #
+      # BEFORE this step, config.json might look like:
+      #   { "ConnectionString": "", "SQLConnectionString": "" }
+      #
+      # AFTER this step, it will have the real values injected.
+      - apt-get install -y jq
+      - |
+        echo "Updating config.json with AWS-injected secrets..."
+        jq \
+          --arg storage "$AZURE_STORAGE_CONN" \
+          --arg sql "$AZURE_SQL_CONN" \
+          --arg apikey "$AZURE_COG_API_KEY" \
+          '.ConnectionString = $storage |
+           .SQLConnectionString = $sql |
+           .AzureCognitiveServiceAPIKey = $apikey' \
+          config.json > config.tmp.json && mv config.tmp.json config.json
+        echo "config.json updated successfully."
+
+      # --- Verify the config was updated ---
+      # We print the keys (but NOT the values!) to confirm injection worked.
+      # Never print secret values in logs — AWS masks them but it's good practice.
+      - echo ">>> Verifying config keys exist (values hidden for security)..."
+      - jq 'keys' config.json
+
+      - echo ">>> PRE-BUILD complete. Secrets injected."
+
+  # -------------------------------------------------------------------------
+  # PHASE 3: BUILD
+  # -------------------------------------------------------------------------
+  # What happens here?
+  #   This is the main event — we actually run your localization pipeline.
+  #   It mirrors the two PowerShell task steps in your azure-pipelines.yml:
+  #
+  #   Azure version:
+  #     - task: PowerShell@2
+  #       filePath: 'scripts/function1.ps1'   ← Phase 1: Extract & Upload
+  #     - task: PowerShell@2
+  #       filePath: 'scripts/function2.ps1'   ← Phase 2: Translate
+  #
+  #   AWS version (below):
+  #     - pwsh scripts/function1.ps1          ← same thing, different syntax
+  #     - pwsh scripts/function2.ps1
+  #
+  # 'pwsh' is the command to run PowerShell on Linux.
+  # -------------------------------------------------------------------------
+  build:
+    commands:
+      # --- Step 1: Run Function1 (Extract & Upload) ---
+      # function1.ps1 converts .resx files to .xlf (XLIFF) format
+      # and uploads them to Azure Blob Storage container 'raw-files'.
+      # This is Phase 1 of the 3-phase localization pipeline.
+      - echo ">>> STEP 1: Running function1.ps1 (Extract .resx → .xlf and upload to Blob)..."
+      - pwsh -File scripts/function1.ps1
+      - echo ">>> STEP 1 COMPLETE: .xlf files uploaded to Azure Blob Storage."
+
+      # --- Step 2: Run Function2 (Translate) ---
+      # function2.ps1 downloads .xlf files from Blob Storage,
+      # checks the SQL Translation Memory for existing translations,
+      # translates any new strings using Azure Cognitive Services,
+      # and saves translated .resx files back to the repo.
+      # This is Phase 2 of the pipeline.
+      - echo ">>> STEP 2: Running function2.ps1 (Translate via SQL TM + Azure Cognitive Services)..."
+      - pwsh -File scripts/function2.ps1
+      - echo ">>> STEP 2 COMPLETE: Translated .resx files generated."
+
+      - echo ">>> BUILD PHASE COMPLETE. Localization pipeline finished successfully!"
+
+  # -------------------------------------------------------------------------
+  # PHASE 4: POST_BUILD
+  # -------------------------------------------------------------------------
+  # What happens here?
+  #   After the build (whether it succeeded or failed), we:
+  #   1. Print a summary so you can see what happened in the AWS logs
+  #   2. The 'artifacts' section below saves log files so you can download them
+  #
+  # This mirrors the Azure pipeline step:
+  #   - task: PublishBuildArtifacts@1
+  #     PathtoPublish: 'logs'
+  # -------------------------------------------------------------------------
+  post_build:
+    commands:
+      # Print the build result — $CODEBUILD_BUILD_SUCCEEDING is an AWS variable
+      # that equals "1" if build passed, "0" if it failed.
+      - |
+        if [ "$CODEBUILD_BUILD_SUCCEEDING" = "1" ]; then
+          echo "✅ BUILD SUCCEEDED: Localization pipeline ran successfully on AWS!"
+        else
+          echo "❌ BUILD FAILED: Check the logs above for errors."
+        fi
+
+      # Print a summary of what was produced
+      - echo ">>> Listing generated files in target-folder (if any)..."
+      - ls target-folder/ 2>/dev/null || echo "(target-folder is empty or does not exist yet)"
+
+      - echo ">>> POST-BUILD complete."
+
+# ---------------------------------------------------------------------------
+# ARTIFACTS
+# ---------------------------------------------------------------------------
+# What are artifacts?
+#   After the build finishes, AWS can save files for you to download later.
+#   This is useful for saving log files, translated output files, etc.
+#
+# The 'files' list below tells AWS: "save these files/folders after the build."
+# You can download them from the AWS CodeBuild console.
+#
+# This mirrors the Azure pipeline:
+#   - task: PublishBuildArtifacts@1
+#     PathtoPublish: 'logs'
+#     ArtifactName: 'logs'
+# ---------------------------------------------------------------------------
+artifacts:
+  files:
+    # Save all log files (*.log) from the root directory
+    - "*.log"
+
+    # Save all files inside the logs/ folder (SLA metrics, batch info, etc.)
+    - "logs/**/*"
+
+    # Save all translated output .resx files from target-folder
+    - "target-folder/**/*"
+
+  # 'discard-paths: no' means keep the folder structure in the saved artifact
+  # e.g., logs/sla-metrics.json stays at logs/sla-metrics.json, not sla-metrics.json
+  discard-paths: no
+
+# ---------------------------------------------------------------------------
+# CACHE (OPTIONAL BUT RECOMMENDED)
+# ---------------------------------------------------------------------------
+# What is caching?
+#   Every time the pipeline runs, it reinstalls PowerShell modules and Python
+#   packages from scratch — which takes time. Caching saves these between runs
+#   so the next run is faster.
+#
+# This solves Bottleneck #3 identified in your project (dependency reinstall
+# taking 45-90 seconds per run). With caching, this drops to ~5 seconds.
+#
+# HOW TO ENABLE:
+#   1. In AWS Console → CodeBuild → your project → Edit → Artifacts
+#   2. Enable "Cache" and choose "Amazon S3"
+#   3. The paths below will be cached in S3 between builds
+# ---------------------------------------------------------------------------
+cache:
+  paths:
+    # Cache pip (Python) packages
+    - "/root/.cache/pip/**/*"
+
+    # Cache PowerShell modules
+    - "/root/.local/share/powershell/Modules/**/*"
