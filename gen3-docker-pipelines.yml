@@ -60,18 +60,10 @@ stages:
             workingDirectory: 'Docker-Local-Inference' 
             displayName: "Inject secrets into config.json"
 
-          # 📦 NEW: Check Azure Pipeline Cache for the Optimized Model
-          - task: Cache@2
-            inputs:
-              key: 'nllb-ct2-model-v1 | "$(Agent.OS)"'
-              path: '$(System.DefaultWorkingDirectory)/Docker-Local-Inference/nllb_ct2'
-              cacheHitVar: MODEL_CACHE_RESTORED
-            displayName: "📦 Restore CTranslate2 Model from Cache"
-
-          # ⚙️ NEW: Download & Convert (Runs ONLY if the cache was missed)
+          # ⚙️ NEW: Download & Convert
           - script: |
               set -e
-              echo "🚀 Model not found in cache. Downloading and converting NLLB-200..."
+              echo "🚀 Downloading and converting NLLB-200..."
               pip install ctranslate2 transformers torch sentencepiece
               ct2-transformers-converter --model facebook/nllb-200-distilled-600M --output_dir nllb_ct2 --quantization int8
               # 🧹 CRITICAL CLEANUP: Free up 5GB of disk space so the agent doesn't crash!
@@ -80,8 +72,7 @@ stages:
               rm -rf ~/.cache/huggingface
               echo "✅ Conversion complete."
             workingDirectory: 'Docker-Local-Inference'
-            condition: ne(variables.MODEL_CACHE_RESTORED, 'true')
-            displayName: "⚙️ Download & Convert NLLB (If Cache Miss)"
+            displayName: "⚙️ Download & Convert NLLB"
 
           # Build the Docker Image
           - script: |
