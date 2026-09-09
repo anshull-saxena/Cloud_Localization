@@ -9,7 +9,11 @@
 ## 3. End-to-End Sequence Flow
 ![Sequence Flow](assets/hld_sequence_flow.jpg)
 
-## 4. Algorithmic Pillars
+## 4. Mathematical Formulation & Optimality Proof
+![Mathematical Formulation](assets/cr_batch_mathematical_formulation.jpg)
+
+## 5. Algorithmic Pillars
 1. **Radix-Trie Prefix Hashing:** Groups leading syntax tokens modulo 16 to maximize cache locality and minimize beam divergence.
-2. **Conformal Quantile Risk Control (tau=0.90):** Calibrates finite-sample target length upper-bounds to eliminate autoregressive decoder tail stragglers.
-3. **1D Monge Optimal Transport Sorting:** Sorts along scalar coordinate $Z_i = (L_{safe} \times 100) + Bucket_{ID}$, achieving provably minimal padding waste in $O(N \log N)$ time.
+2. **Conformal Quantile Risk Control ($\tau=0.90$):** Calibrates finite-sample target length upper-bounds via pinball loss to eliminate autoregressive decoder tail stragglers ($\mathbb{P}(L_i^{tgt} > \hat{L}_i^{\text{safe}}) \le 0.10$).
+3. **1D Monge Optimal Transport Sorting:** Sorts along scalar coordinate $\mathcal{Z}_i = (\hat{L}_i^{\text{safe}} \times M) + \pi(s_i)$, achieving provably minimal padding waste in $\mathcal{O}(N \log N)$ time.
+
